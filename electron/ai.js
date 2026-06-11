@@ -18,11 +18,14 @@ const MODEL = 'moonshot-v1-auto'
 
 // 系统提示词：约束 Kimi 一次返回三套思路不同的 JSON 分类方案
 const SYSTEM_PROMPT = `你是文件整理专家。根据文件清单，设计恰好 3 套思路明显不同的分类方案。
+最重要的规则：三套方案是给用户三选一的独立备选项，不是互补关系。
+每一套方案都必须独立地把清单中的全部文件分类完毕：清单里的每个文件，
+在每套方案里都要恰好出现在某一个分类的 files 里。绝不允许把文件分摊到不同方案。
 返回严格的 JSON 格式：
 { "plans": [ { "name": "方案名", "folders": [ { "name": "分类名", "files": ["文件名1", "文件名2"], "reason": "为什么这样分" } ] } ] }
 三套方案的建议角度（可按清单实际情况发挥，但必须互相区分）：
 1. 按文件类型分（如"图片""文档""安装包""压缩包""视频"）；
-2. 按主题或项目分（如果文件名有明显规律）；
+2. 按主题或项目分（如果文件名有明显规律，规律不明显的文件可归入"其他"等兜底分类）；
 3. 混合或其他合理思路。
 每套方案的 name 不超过 6 个字、能概括该套思路（如"按类型分类"），三套 name 不得重复。
 分类要符合普通人直觉。不允许返回 JSON 以外的任何文字。`
@@ -182,6 +185,30 @@ async function streamCompletion(messages, onProgress) {
 }
 
 /**
+ * 覆盖率兜底：提示词要求每套方案独立覆盖全部文件，但模型偶尔仍会漏掉个别文件，
+ * 把每套方案未覆盖的文件（不含子文件夹）归入「其他」分类，保证每套方案都完整。
+ * 仅用于初次分析；对话调整不做兜底——用户可能就是要求把某些文件从方案里去掉。
+ */
+function fillMissingFiles(plans, files) {
+  const allNames = files.filter((f) => !f.isDirectory).map((f) => f.name)
+  for (const plan of plans) {
+    const covered = new Set(
+      plan.folders.flatMap((folder) => (Array.isArray(folder.files) ? folder.files : [])),
+    )
+    const missing = allNames.filter((name) => !covered.has(name))
+    if (missing.length === 0) continue
+    // 方案里已有「其他」分类就并入，否则补一个兜底分类
+    const fallback = plan.folders.find((folder) => folder.name === '其他')
+    if (fallback && Array.isArray(fallback.files)) {
+      fallback.files.push(...missing)
+    } else {
+      plan.folders.push({ name: '其他', files: missing, reason: '方案未覆盖的文件，自动归入兜底分类' })
+    }
+  }
+  return plans
+}
+
+/**
  * 调用 Kimi 分析文件清单，返回三套分类方案：
  * [ { name: 方案名, folders: [ { name, files: [...], reason } ] } ]
  * 失败时抛出带中文说明的 Error。
@@ -195,11 +222,13 @@ async function analyzeFiles(files, onProgress) {
     onProgress,
   )
 
+  let plans
   try {
-    return parsePlans(text)
+    plans = parsePlans(text)
   } catch (err) {
     throw new Error(`无法解析 Kimi 返回的 JSON：${err.message}`)
   }
+  return fillMissingFiles(plans, files)
 }
 
 /**
