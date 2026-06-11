@@ -1,2 +1,82 @@
-/* Tailwind CSS v4：只需这一行 import，无需 tailwind.config 配置文件 */
+/* Tailwind CSS v4：无需 tailwind.config 配置文件，主题令牌全在本文件 */
 @import "tailwindcss";
+
+/* 暗色模式 = html 上的 .dark 类（手动切换 + localStorage 记忆），不跟随系统 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* 语义令牌注册成 Tailwind 颜色：组件里用 bg-canvas / bg-surface / text-ink 等类名，
+   两套主题通过下方 CSS 变量自动切换。改样式请用这些令牌，不要写死 gray-xxx 灰阶色 */
+@theme inline {
+  --color-canvas: var(--canvas);     /* 页面背景 */
+  --color-surface: var(--surface);   /* 卡片/弹窗表面 */
+  --color-sunken: var(--sunken);     /* 表头/灰条等次级凹陷面 */
+  --color-line: var(--line);         /* 边框/分隔线 */
+  --color-ink: var(--ink);           /* 主文字 */
+  --color-ink-2: var(--ink-2);       /* 次级文字 */
+  --color-ink-3: var(--ink-3);       /* 弱化文字/占位符 */
+  --color-accent: var(--accent);     /* 主操作色（indigo 系） */
+  --color-accent-hi: var(--accent-hi); /* 主操作色 hover */
+}
+
+/* 亮色主题（默认变量） */
+:root {
+  --canvas: #f4f5f7;
+  --surface: #ffffff;
+  --sunken: #f0f1f3;
+  --line: #e4e6ea;
+  --ink: #1f2328;
+  --ink-2: #57606a;
+  --ink-3: #9aa3ad;
+  --accent: #4f46e5;
+  --accent-hi: #4338ca;
+}
+
+/* 暗色主题：与应用图标（深灰底银色粒子环）同气质 */
+.dark {
+  --canvas: #17181c;
+  --surface: #1f2127;
+  --sunken: #26282f;
+  --line: #34363e;
+  --ink: #e8eaed;
+  --ink-2: #a8adb6;
+  --ink-3: #6b7079;
+  --accent: #818cf8;
+  --accent-hi: #a5b4fc;
+}
+
+/* 背景色随主题切换时平滑过渡 */
+html {
+  background: var(--canvas);
+}
+body {
+  transition: background-color 0.2s ease;
+}
+
+/* ===== 微动效 =====
+   fade-in：提示条/卡片淡入上移；pop-in：弹窗轻微放大入场。都很克制（≤0.2s） */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@utility animate-fade-in {
+  animation: fade-in 0.2s ease-out both;
+}
+@utility animate-pop-in {
+  animation: pop-in 0.15s ease-out both;
+}

@@ -47,6 +47,8 @@ function createWindow() {
     width: 900,
     height: 680,
     title: 'holy_sexy_folder_management',
+    backgroundColor: '#17181c', // 与默认暗色主题的 --canvas 一致，避免启动白闪
+    show: false, // 渲染就绪后再显示，配合 backgroundColor 消除闪烁
     webPreferences: {
       // preload 脚本：在隔离环境中向页面注入 window.api
       preload: path.join(__dirname, 'preload.js'),
@@ -55,6 +57,8 @@ function createWindow() {
       nodeIntegration: false, // 禁止页面直接使用 Node.js API
     },
   })
+
+  win.once('ready-to-show', () => win.show())
 
   if (app.isPackaged) {
     // 生产环境：加载 Vite 构建产物

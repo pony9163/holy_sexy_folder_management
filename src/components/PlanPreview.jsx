@@ -6,43 +6,52 @@
 // - 被约束开关跳过的条目（已有文件夹/最近修改/排除类型）显示为底部灰色提示区
 // - "确认整理"：弹窗确认 → 调主进程真正移动文件（显示进度）→ 显示"已整理 XX 个文件"
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Folder, FileText, MessageSquareText, Send, Loader2, CheckCircle2 } from 'lucide-react'
 import { formatSize } from '../utils/format'
 
 // 单个方案卡片：一个新文件夹 + 其下将移入的文件列表
 function FolderCard({ folder, fileMap, excludedSet, onToggle }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+    <div className="animate-fade-in overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
       {/* 卡片头：文件夹名 + 文件计数 */}
-      <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-3">
-        <span className="font-medium text-gray-800">
-          <span className="mr-2">📁</span>
+      <div className="flex items-center justify-between border-b border-line bg-sunken px-4 py-3">
+        <span className="inline-flex items-center gap-2 font-medium text-ink">
+          <Folder size={16} className="text-accent" />
           {folder.name}
         </span>
-        <span className="text-sm text-gray-400">{folder.validNames.length} 个文件</span>
+        <span className="text-sm text-ink-3">{folder.validNames.length} 个文件</span>
       </div>
       {/* AI 给出的分类理由 */}
-      <p className="px-4 py-2 text-sm text-gray-500">{folder.reason}</p>
+      <p className="px-4 py-2 text-sm text-ink-2">{folder.reason}</p>
       {/* 将移入该文件夹的条目列表（约束放行时可能含整个文件夹） */}
-      <ul className="divide-y divide-gray-100">
+      <ul className="divide-y divide-line">
         {folder.validNames.map((name) => {
           const excluded = excludedSet.has(name)
           const entry = fileMap.get(name)
           return (
             <li key={name} className="flex items-center justify-between px-4 py-2.5 text-sm">
-              <span className={excluded ? 'text-gray-400 line-through' : 'text-gray-800'}>
-                <span className="mr-2">{entry.isDirectory ? '📁' : '📄'}</span>
+              <span
+                className={`inline-flex items-center gap-2 ${
+                  excluded ? 'text-ink-3 line-through' : 'text-ink'
+                }`}
+              >
+                {entry.isDirectory ? (
+                  <Folder size={15} className="shrink-0 text-accent/70" />
+                ) : (
+                  <FileText size={15} className="shrink-0 text-ink-3" />
+                )}
                 {name}
               </span>
               <span className="flex items-center gap-3">
                 {/* 文件夹的大小列与 FileTable 一致显示 — */}
-                <span className="text-gray-400">{entry.isDirectory ? '—' : formatSize(entry.size)}</span>
+                <span className="text-ink-3">{entry.isDirectory ? '—' : formatSize(entry.size)}</span>
                 {/* 排除/恢复开关：误点可挽回 */}
                 <button
                   onClick={() => onToggle(name)}
-                  className={`rounded border px-2 py-0.5 text-xs transition ${
+                  className={`rounded border px-2 py-0.5 text-xs transition active:scale-[0.97] ${
                     excluded
-                      ? 'border-gray-300 text-gray-600 hover:bg-gray-50'
-                      : 'border-red-200 text-red-600 hover:bg-red-50'
+                      ? 'border-line text-ink-2 hover:bg-sunken'
+                      : 'border-red-200 text-red-600 hover:bg-red-50 dark:border-red-400/30 dark:text-red-300 dark:hover:bg-red-400/10'
                   }`}
                 >
                   {excluded ? '恢复' : '排除'}
@@ -232,10 +241,10 @@ export default function PlanPreview({
               setActiveIndex(i)
               setAdjustError(null) // 错误提示只属于发消息时的方案，切 Tab 即清
             }}
-            className={`rounded-lg px-4 py-2 text-sm transition ${
+            className={`rounded-lg px-4 py-2 text-sm transition active:scale-[0.98] ${
               i === activeIndex
-                ? 'bg-blue-600 font-medium text-white'
-                : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                ? 'bg-accent font-medium text-white shadow dark:text-indigo-950'
+                : 'border border-line bg-surface text-ink-2 hover:bg-sunken'
             }`}
           >
             {plan.name}
@@ -258,7 +267,7 @@ export default function PlanPreview({
 
       {/* 被约束跳过的条目：灰色列出名字和原因，不出现在任何方案卡片里 */}
       {skipped.length > 0 && (
-        <div className="mt-4 max-h-40 overflow-y-auto rounded-lg bg-gray-100 px-4 py-2.5 text-sm text-gray-500">
+        <div className="mt-4 max-h-40 overflow-y-auto rounded-xl bg-sunken px-4 py-2.5 text-sm text-ink-3">
           <p className="mb-1">以下 {skipped.length} 项按约束跳过，不参与整理：</p>
           <ul className="space-y-0.5">
             {skipped.map((s) => (
@@ -271,22 +280,23 @@ export default function PlanPreview({
       )}
 
       {/* 聊天面板：用自然语言让 AI 改写当前选中的方案 */}
-      <div className="mt-4 rounded-lg border border-gray-200 bg-white shadow-sm">
-        <p className="border-b border-gray-100 bg-gray-50 px-4 py-2.5 text-sm font-medium text-gray-700">
-          💬 对「{localPlans[activeIndex].name}」提调整要求
+      <div className="mt-4 rounded-xl border border-line bg-surface shadow-sm">
+        <p className="inline-flex w-full items-center gap-2 border-b border-line bg-sunken px-4 py-2.5 text-sm font-medium text-ink-2">
+          <MessageSquareText size={15} className="text-accent" />
+          对「{localPlans[activeIndex].name}」提调整要求
         </p>
-        {/* 消息列表：用户右侧蓝、AI 左侧灰；为空时显示引导文案 */}
+        {/* 消息列表：用户右侧主色、AI 左侧灰；为空时显示引导文案 */}
         <div className="max-h-64 space-y-2 overflow-y-auto px-4 py-3">
           {chats[activeIndex].length === 0 && !adjusting && (
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-ink-3">
               例如："把截图和照片合并成一个分类"、"新建一个叫 2024 报销 的分类"
             </p>
           )}
           {chats[activeIndex].map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <p
-                className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
-                  msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-800'
+                className={`max-w-[80%] animate-fade-in rounded-lg px-3 py-2 text-sm ${
+                  msg.role === 'user' ? 'bg-accent text-white dark:text-indigo-950' : 'bg-sunken text-ink'
                 }`}
               >
                 {msg.content}
@@ -296,7 +306,8 @@ export default function PlanPreview({
           {/* 调整中提示：流式接收进度 */}
           {adjusting && (
             <div className="flex justify-start">
-              <p className="max-w-[80%] rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-500">
+              <p className="inline-flex max-w-[80%] animate-fade-in items-center gap-1.5 rounded-lg bg-sunken px-3 py-2 text-sm text-ink-2">
+                <Loader2 size={14} className="animate-spin" />
                 {adjustProgress > 0
                   ? `调整中…已接收 ${adjustProgress} 字`
                   : `等待 Kimi 响应…${adjustSeconds}s`}
@@ -304,23 +315,26 @@ export default function PlanPreview({
             </div>
           )}
           {/* 调整失败：面板内显示错误行，不打断已有对话 */}
-          {adjustError && <p className="text-sm text-red-600">调整失败：{adjustError}</p>}
+          {adjustError && (
+            <p className="text-sm text-red-600 dark:text-red-300">调整失败：{adjustError}</p>
+          )}
           <div ref={chatBottomRef} />
         </div>
         {/* 输入区：调整中禁用 */}
-        <form onSubmit={handleSendChat} className="flex gap-2 border-t border-gray-100 px-4 py-3">
+        <form onSubmit={handleSendChat} className="flex gap-2 border-t border-line px-4 py-3">
           <input
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
             disabled={adjusting}
             placeholder="告诉 AI 你想怎么调整当前方案…"
-            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-blue-400 disabled:bg-gray-50"
+            className="flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none transition placeholder:text-ink-3 focus:border-accent disabled:bg-sunken"
           />
           <button
             type="submit"
             disabled={adjusting || chatInput.trim() === ''}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-700 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-accent-hi active:scale-[0.98] disabled:opacity-50 dark:text-indigo-950"
           >
+            <Send size={14} />
             发送
           </button>
         </form>
@@ -330,7 +344,7 @@ export default function PlanPreview({
       <div className="mt-4 flex justify-end gap-3">
         <button
           onClick={onCancel}
-          className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-gray-700 shadow-sm transition hover:bg-gray-50"
+          className="rounded-lg border border-line bg-surface px-5 py-2.5 text-ink-2 shadow-sm transition hover:bg-sunken active:scale-[0.98]"
         >
           取消
         </button>
@@ -338,7 +352,7 @@ export default function PlanPreview({
           onClick={() => setPhase('confirm')}
           disabled={moveCount === 0}
           title={moveCount === 0 ? '没有可整理的文件' : undefined}
-          className="rounded-lg bg-emerald-600 px-5 py-2.5 font-medium text-white shadow transition hover:bg-emerald-700 disabled:opacity-50"
+          className="rounded-lg bg-emerald-600 px-5 py-2.5 font-medium text-white shadow transition hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-50 dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400"
         >
           确认整理
         </button>
@@ -352,27 +366,27 @@ export default function PlanPreview({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl"
+            className="w-full max-w-sm animate-pop-in rounded-xl border border-line bg-surface p-6 shadow-xl"
           >
             {phase === 'confirm' && (
               <>
-                <p className="text-gray-800">
+                <p className="text-ink">
                   将在 <span className="font-medium">{folderPath}</span> 内创建分类文件夹并移动{' '}
                   {moveCount} 个文件
                 </p>
-                <p className="mt-2 text-sm text-gray-500">
+                <p className="mt-2 text-sm text-ink-2">
                   移动前会保存完整的位置记录，整理后可一键撤销
                 </p>
                 <div className="mt-5 flex justify-end gap-3">
                   <button
                     onClick={() => setPhase(null)}
-                    className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-gray-700 shadow-sm transition hover:bg-gray-50"
+                    className="rounded-lg border border-line bg-surface px-5 py-2.5 text-ink-2 shadow-sm transition hover:bg-sunken active:scale-[0.98]"
                   >
                     取消
                   </button>
                   <button
                     onClick={handleOrganize}
-                    className="rounded-lg bg-emerald-600 px-5 py-2.5 font-medium text-white shadow transition hover:bg-emerald-700"
+                    className="rounded-lg bg-emerald-600 px-5 py-2.5 font-medium text-white shadow transition hover:bg-emerald-700 active:scale-[0.98] dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400"
                   >
                     开始整理
                   </button>
@@ -382,12 +396,13 @@ export default function PlanPreview({
 
             {phase === 'running' && (
               <>
-                <p className="text-gray-800">
+                <p className="inline-flex items-center gap-2 text-ink">
+                  <Loader2 size={16} className="animate-spin text-emerald-500" />
                   正在移动文件…
                   {moveProgress ? ` ${moveProgress.current}/${moveProgress.total}` : ''}
                 </p>
                 {/* 进度条：按已移动数量填充 */}
-                <div className="mt-4 h-2 overflow-hidden rounded-full bg-gray-200">
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-sunken">
                   <div
                     className="h-full rounded-full bg-emerald-500 transition-all"
                     style={{
@@ -404,10 +419,13 @@ export default function PlanPreview({
               <>
                 {result.ok ? (
                   <>
-                    <p className="text-gray-800">✅ 已整理 {result.moved} 个文件</p>
+                    <p className="inline-flex items-center gap-2 text-ink">
+                      <CheckCircle2 size={18} className="text-emerald-500" />
+                      已整理 {result.moved} 个文件
+                    </p>
                     {/* 部分文件失败时列出原因 */}
                     {result.errors.length > 0 && (
-                      <div className="mt-3 max-h-40 overflow-y-auto rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                      <div className="mt-3 max-h-40 overflow-y-auto rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-400/10 dark:text-red-300">
                         <p className="mb-1">以下 {result.errors.length} 个文件未能移动：</p>
                         <ul className="space-y-0.5">
                           {result.errors.map((e) => (
@@ -420,7 +438,7 @@ export default function PlanPreview({
                     )}
                   </>
                 ) : (
-                  <p className="text-red-700">整理失败：{result.error}</p>
+                  <p className="text-red-700 dark:text-red-300">整理失败：{result.error}</p>
                 )}
                 <div className="mt-5 flex justify-end">
                   <button
@@ -428,7 +446,7 @@ export default function PlanPreview({
                       setPhase(null)
                       if (result.ok) onOrganized(result)
                     }}
-                    className="rounded-lg bg-blue-600 px-5 py-2.5 font-medium text-white shadow transition hover:bg-blue-700"
+                    className="rounded-lg bg-accent px-5 py-2.5 font-medium text-white shadow transition hover:bg-accent-hi active:scale-[0.98] dark:text-indigo-950"
                   >
                     完成
                   </button>

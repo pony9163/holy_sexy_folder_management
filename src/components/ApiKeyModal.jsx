@@ -4,6 +4,7 @@
 // - 密钥只在「保存/测试」时单向发给主进程，本组件从不接收完整密钥（状态里只有末 4 位掩码）
 // - 保存成功后立即清空本地输入框 state
 import { useEffect, useState } from 'react'
+import { Settings, Eye, EyeOff, Lock, TriangleAlert } from 'lucide-react'
 
 export default function ApiKeyModal({ onClose, onStatusChange }) {
   const [status, setStatus] = useState(null)   // 主进程返回的密钥状态（含掩码，不含完整密钥）
@@ -85,20 +86,23 @@ export default function ApiKeyModal({ onClose, onStatusChange }) {
     >
       {/* 弹窗主体，阻止冒泡避免误关 */}
       <div
-        className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+        className="w-full max-w-md animate-pop-in rounded-xl border border-line bg-surface p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-4 text-lg font-bold text-gray-800">⚙️ API Key 设置</h2>
+        <h2 className="mb-4 inline-flex items-center gap-2 text-lg font-bold text-ink">
+          <Settings size={18} className="text-accent" />
+          API Key 设置
+        </h2>
 
         {/* 当前状态 */}
-        <div className="mb-4 rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
+        <div className="mb-4 rounded-lg bg-sunken px-4 py-3 text-sm text-ink-2">
           {status === null ? (
             '状态读取中…'
           ) : status.configured ? (
             <>
-              当前密钥：<span className="font-mono text-gray-800">{status.maskedKey}</span>
+              当前密钥：<span className="font-mono text-ink">{status.maskedKey}</span>
               {!status.persisted && (
-                <span className="ml-2 text-amber-600">（仅本次运行有效）</span>
+                <span className="ml-2 text-amber-600 dark:text-amber-300">（仅本次运行有效）</span>
               )}
             </>
           ) : (
@@ -106,8 +110,9 @@ export default function ApiKeyModal({ onClose, onStatusChange }) {
           )}
           {/* Linux 弱加密后端提示 */}
           {status?.weakBackend && (
-            <p className="mt-1 text-xs text-amber-600">
-              ⚠ 当前系统未启用密钥环（gnome-keyring/kwallet），存储加密强度较弱
+            <p className="mt-1 inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-300">
+              <TriangleAlert size={12} />
+              当前系统未启用密钥环（gnome-keyring/kwallet），存储加密强度较弱
             </p>
           )}
         </div>
@@ -121,22 +126,24 @@ export default function ApiKeyModal({ onClose, onStatusChange }) {
             placeholder="sk-..."
             autoComplete="off"
             spellCheck={false}
-            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm focus:border-blue-500 focus:outline-none"
+            className="flex-1 rounded-lg border border-line bg-surface px-3 py-2 font-mono text-sm text-ink outline-none transition placeholder:text-ink-3 focus:border-accent"
           />
           <button
             onClick={() => setShowKey(!showKey)}
             title={showKey ? '隐藏' : '显示'}
-            className="rounded-lg border border-gray-300 px-3 text-gray-500 hover:bg-gray-50"
+            className="rounded-lg border border-line px-3 text-ink-3 transition hover:bg-sunken"
           >
-            {showKey ? '🙈' : '👁'}
+            {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
         </div>
 
         {/* 操作结果提示 */}
         {message && (
           <p
-            className={`mb-4 rounded-lg px-3 py-2 text-sm ${
-              message.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+            className={`mb-4 animate-fade-in rounded-lg px-3 py-2 text-sm ${
+              message.ok
+                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300'
+                : 'bg-red-50 text-red-700 dark:bg-red-400/10 dark:text-red-300'
             }`}
           >
             {message.text}
@@ -148,14 +155,14 @@ export default function ApiKeyModal({ onClose, onStatusChange }) {
           <button
             onClick={handleSave}
             disabled={busy || !input.trim()}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-hi active:scale-[0.98] disabled:opacity-50 dark:text-indigo-950"
           >
             保存
           </button>
           <button
             onClick={handleTest}
             disabled={busy || (!input.trim() && !status?.configured)}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            className="rounded-lg border border-line px-4 py-2 text-sm text-ink-2 transition hover:bg-sunken active:scale-[0.98] disabled:opacity-50"
           >
             测试连接
           </button>
@@ -163,22 +170,23 @@ export default function ApiKeyModal({ onClose, onStatusChange }) {
             <button
               onClick={handleDelete}
               disabled={busy}
-              className="rounded-lg border border-red-200 px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+              className="rounded-lg border border-red-200 px-4 py-2 text-sm text-red-600 transition hover:bg-red-50 active:scale-[0.98] disabled:opacity-50 dark:border-red-400/30 dark:text-red-300 dark:hover:bg-red-400/10"
             >
               删除密钥
             </button>
           )}
           <button
             onClick={onClose}
-            className="ml-auto rounded-lg px-4 py-2 text-sm text-gray-500 hover:bg-gray-100"
+            className="ml-auto rounded-lg px-4 py-2 text-sm text-ink-3 transition hover:bg-sunken"
           >
             关闭
           </button>
         </div>
 
         {/* 安全说明 */}
-        <p className="mt-4 text-xs text-gray-400">
-          🔒 密钥经操作系统级加密后仅存储在本机，不会上传到任何服务器；
+        <p className="mt-4 inline-flex items-start gap-1.5 text-xs text-ink-3">
+          <Lock size={12} className="mt-0.5 shrink-0" />
+          密钥经操作系统级加密后仅存储在本机，不会上传到任何服务器；
           调用 Kimi API 时由本应用直接发往 Moonshot 官方接口。
         </p>
       </div>

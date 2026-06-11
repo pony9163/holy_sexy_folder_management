@@ -27,7 +27,9 @@
       "buildResources": "build"
     },
     "linux": {
-      "target": ["deb"],
+      "target": [
+        "deb"
+      ],
       "category": "Utility",
       "icon": "build/icon.png",
       "synopsis": "AI 文件夹整理工具",
@@ -37,7 +39,10 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["arm64", "x64"]
+          "arch": [
+            "arm64",
+            "x64"
+          ]
         }
       ],
       "category": "public.app-category.utilities",
@@ -45,12 +50,21 @@
     },
     "dmg": {
       "contents": [
-        { "x": 130, "y": 220 },
-        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     }
   },
   "dependencies": {
+    "lucide-react": "^1.17.0",
     "openai": "^6.42.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

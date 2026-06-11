@@ -4,10 +4,25 @@
 // - 点「分析」：把文件清单发给 Kimi 生成分类方案，结果以预览卡片展示（可排除文件后确认）
 // - ⚙️ 设置：填写/管理 Moonshot API Key（加密存储在主进程侧）
 import { useEffect, useMemo, useState } from 'react'
+import {
+  FolderOpen,
+  FolderSearch,
+  FolderMinus,
+  Sparkles,
+  Settings,
+  History,
+  Undo2,
+  Sun,
+  Moon,
+  Loader2,
+} from 'lucide-react'
 import FileTable from './components/FileTable'
 import ApiKeyModal from './components/ApiKeyModal'
 import PlanPreview from './components/PlanPreview'
 import HistoryModal from './components/HistoryModal'
+
+// 主题持久化 key：'dark' | 'light'，默认暗色（与应用图标气质一致）
+const THEME_KEY = 'ui-theme'
 
 // 约束开关的持久化 key 与默认值（跨会话记住用户习惯）
 const CONSTRAINTS_KEY = 'organize-constraints-v1'
@@ -54,6 +69,13 @@ export default function App() {
   const [confirmLarge, setConfirmLarge] = useState(false) // 文件数超阈值的分析确认框
   const [cleanable, setCleanable] = useState(null)    // 可清理空分类文件夹 { folderPath }（撤销/恢复后设置）
   const [cleaning, setCleaning] = useState(false)     // 是否正在清理空文件夹
+  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'dark') // 界面主题
+
+  // 主题切换：html 上挂/摘 .dark 类（index.css 的 @custom-variant 据此生效）并持久化
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+    localStorage.setItem(THEME_KEY, theme)
+  }, [theme])
 
   // 约束变更即写回 localStorage
   useEffect(() => {
@@ -257,12 +279,17 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
+    <div className="min-h-screen bg-canvas p-8 text-ink transition-colors">
       <div className="mx-auto max-w-4xl">
         {/* 标题栏与操作按钮 */}
-        <header className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-800">📂 holy_sexy_folder_management</h1>
-          <div className="flex gap-3">
+        <header className="mb-6 flex items-center justify-between gap-4">
+          {/* min-w-0 + truncate：空间不足时标题截断，绝不挤压右侧按钮 */}
+          <h1 className="flex min-w-0 items-center gap-2.5 text-xl font-bold text-ink">
+            <FolderOpen size={24} className="shrink-0 text-accent" />
+            <span className="truncate">holy_sexy_folder_management</span>
+          </h1>
+          {/* 按钮全部 nowrap：宁可标题截断，也不能让按钮文字竖排 */}
+          <div className="flex shrink-0 gap-2.5 whitespace-nowrap">
             {/* 撤销按钮：只在有可撤销记录时显示，悬停可见上次整理的文件夹和时间 */}
             {undoable?.undoable && (
               <button
@@ -271,22 +298,24 @@ export default function App() {
                 title={`上次整理：${undoable.info.folderPath}（${new Date(
                   undoable.info.createdAt,
                 ).toLocaleString()}，${undoable.info.moveCount} 个文件）`}
-                className="rounded-lg border border-amber-300 bg-amber-50 px-5 py-2.5 font-medium text-amber-700 shadow-sm transition hover:bg-amber-100 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 font-medium text-amber-700 shadow-sm transition hover:bg-amber-100 active:scale-[0.98] disabled:opacity-50 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300 dark:hover:bg-amber-400/20"
               >
+                <Undo2 size={16} />
                 {undoing
                   ? undoProgress
                     ? `撤销中 ${undoProgress.current}/${undoProgress.total}`
                     : '撤销中…'
-                  : '↩️ 撤销上次整理'}
+                  : '撤销上次整理'}
               </button>
             )}
             {/* 整理历史按钮：始终显示（历史全是已撤销记录时仍可查看） */}
             <button
               onClick={() => setShowHistory(true)}
               title="查看整理历史并恢复"
-              className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 font-medium text-gray-700 shadow-sm transition hover:bg-gray-50"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-4 py-2.5 font-medium text-ink-2 shadow-sm transition hover:bg-sunken active:scale-[0.98]"
             >
-              📜 整理历史
+              <History size={16} />
+              整理历史
             </button>
             {/* 分析按钮：选了文件夹且约束过滤后仍有条目才可点 */}
             <button
@@ -297,28 +326,38 @@ export default function App() {
                   ? '所有条目都被约束开关跳过，没有可分析的文件'
                   : undefined
               }
-              className="rounded-lg bg-emerald-600 px-5 py-2.5 font-medium text-white shadow transition hover:bg-emerald-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2.5 font-medium text-white shadow transition hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-50 dark:bg-emerald-500 dark:hover:bg-emerald-400 dark:text-emerald-950"
             >
+              {analyzing ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
               {analyzing
                 ? progress > 0
                   ? `分析中…已接收 ${progress} 字`
                   : `等待 Kimi 响应…${analyzeSeconds}s`
-                : '✨ 分析'}
+                : '分析'}
             </button>
             <button
               onClick={handleSelectFolder}
               disabled={loading}
-              className="rounded-lg bg-blue-600 px-5 py-2.5 font-medium text-white shadow transition hover:bg-blue-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2.5 font-medium text-white shadow transition hover:bg-accent-hi active:scale-[0.98] disabled:opacity-50 dark:text-indigo-950"
             >
+              <FolderSearch size={16} />
               {loading ? '读取中…' : '选择文件夹'}
             </button>
             {/* 设置按钮：打开 API Key 设置弹窗 */}
             <button
               onClick={() => setShowSettings(true)}
               title="API Key 设置"
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-lg shadow-sm transition hover:bg-gray-50"
+              className="inline-flex items-center rounded-lg border border-line bg-surface px-3 py-2.5 text-ink-2 shadow-sm transition hover:bg-sunken active:scale-[0.98]"
             >
-              ⚙️
+              <Settings size={18} />
+            </button>
+            {/* 主题切换：暗/亮 */}
+            <button
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              title={theme === 'dark' ? '切换到亮色主题' : '切换到暗色主题'}
+              className="inline-flex items-center rounded-lg border border-line bg-surface px-3 py-2.5 text-ink-2 shadow-sm transition hover:bg-sunken active:scale-[0.98]"
+            >
+              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
             </button>
           </div>
         </header>
@@ -327,7 +366,7 @@ export default function App() {
         {folderPath && (
           <div
             title={constraintsLocked ? '分析中或预览打开时不可修改，返回文件列表后再调整' : undefined}
-            className={`mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-700 shadow-sm ${
+            className={`mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-line bg-surface px-4 py-2.5 text-sm text-ink-2 shadow-sm transition ${
               constraintsLocked ? 'opacity-60' : ''
             }`}
           >
@@ -365,22 +404,22 @@ export default function App() {
                 disabled={constraintsLocked || !constraints.excludeExtsEnabled}
                 onChange={(e) => setConstraints((c) => ({ ...c, excludeExts: e.target.value }))}
                 placeholder="如 exe,dmg"
-                className="w-28 rounded border border-gray-300 px-2 py-1 text-xs outline-none transition focus:border-blue-400 disabled:bg-gray-100"
+                className="w-28 rounded border border-line bg-surface px-2 py-1 text-xs text-ink outline-none transition focus:border-accent disabled:bg-sunken"
               />
             </label>
             {/* 实时统计被跳过的条目数 */}
             {skippedEntries.length > 0 && (
-              <span className="text-xs text-gray-400">已跳过 {skippedEntries.length} 项</span>
+              <span className="text-xs text-ink-3">已跳过 {skippedEntries.length} 项</span>
             )}
           </div>
         )}
 
         {/* 未配置密钥时的引导提示 */}
         {keyStatus && !keyStatus.configured && (
-          <p className="mb-4 rounded-lg bg-amber-50 px-4 py-2.5 text-sm text-amber-700">
+          <p className="mb-4 animate-fade-in rounded-lg bg-amber-50 px-4 py-2.5 text-sm text-amber-700 dark:bg-amber-400/10 dark:text-amber-300">
             尚未设置 API Key，「分析」功能需要先在
             <button onClick={() => setShowSettings(true)} className="mx-1 underline">
-              ⚙️ 设置
+              设置
             </button>
             中填写你的 Moonshot API Key
           </p>
@@ -389,10 +428,10 @@ export default function App() {
         {/* 分析结果提示条：成功为绿色，失败为红色；撤销后留有空分类文件夹时附清理按钮 */}
         {analyzeStatus && (
           <p
-            className={`mb-4 rounded-lg px-4 py-2.5 text-sm ${
+            className={`mb-4 animate-fade-in rounded-lg px-4 py-2.5 text-sm ${
               analyzeStatus.ok
-                ? 'bg-emerald-50 text-emerald-700'
-                : 'bg-red-50 text-red-700'
+                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300'
+                : 'bg-red-50 text-red-700 dark:bg-red-400/10 dark:text-red-300'
             }`}
           >
             {analyzeStatus.message}
@@ -401,9 +440,10 @@ export default function App() {
                 onClick={handleCleanFolders}
                 disabled={cleaning}
                 title="只删除整理时创建且现在为空的分类文件夹，里面有内容的会保留"
-                className="ml-2 underline disabled:opacity-50"
+                className="ml-2 inline-flex items-center gap-1 underline disabled:opacity-50"
               >
-                {cleaning ? '清理中…' : '🧹 清理空分类文件夹'}
+                <FolderMinus size={14} />
+                {cleaning ? '清理中…' : '清理空分类文件夹'}
               </button>
             )}
           </p>
@@ -412,8 +452,8 @@ export default function App() {
         {folderPath ? (
           <>
             {/* 当前路径和条目统计 */}
-            <p className="mb-3 text-sm text-gray-500">
-              <span className="font-medium text-gray-700">{folderPath}</span>
+            <p className="mb-3 text-sm text-ink-3">
+              <span className="font-medium text-ink-2">{folderPath}</span>
               <span className="ml-2">共 {files.length} 项（仅第一层）</span>
             </p>
             {/* 有整理方案时显示预览界面，否则显示原始文件列表 */}
@@ -433,7 +473,8 @@ export default function App() {
           </>
         ) : (
           /* 空状态：还没有选择文件夹时的提示 */
-          <div className="rounded-lg border-2 border-dashed border-gray-300 py-24 text-center text-gray-400">
+          <div className="flex animate-fade-in flex-col items-center gap-3 rounded-xl border-2 border-dashed border-line py-24 text-center text-ink-3">
+            <FolderOpen size={40} className="text-ink-3/60" />
             点击右上角「选择文件夹」按钮，查看文件夹内容
           </div>
         )}
@@ -447,16 +488,16 @@ export default function App() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl"
+            className="w-full max-w-sm animate-pop-in rounded-xl border border-line bg-surface p-6 shadow-xl"
           >
-            <p className="text-gray-800">
+            <p className="text-ink">
               文件较多（{eligibleFiles.length} 个），AI
               分析可能不完整或较慢，建议先勾选约束条件减少范围，或分批整理。仍要继续吗？
             </p>
             <div className="mt-5 flex justify-end gap-3">
               <button
                 onClick={() => setConfirmLarge(false)}
-                className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-gray-700 shadow-sm transition hover:bg-gray-50"
+                className="rounded-lg border border-line bg-surface px-5 py-2.5 text-ink-2 shadow-sm transition hover:bg-sunken active:scale-[0.98]"
               >
                 取消
               </button>
@@ -465,7 +506,7 @@ export default function App() {
                   setConfirmLarge(false)
                   doAnalyze()
                 }}
-                className="rounded-lg bg-emerald-600 px-5 py-2.5 font-medium text-white shadow transition hover:bg-emerald-700"
+                className="rounded-lg bg-emerald-600 px-5 py-2.5 font-medium text-white shadow transition hover:bg-emerald-700 active:scale-[0.98] dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400"
               >
                 仍要继续
               </button>

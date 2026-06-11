@@ -3,6 +3,7 @@
 // - 每条可「恢复」：顺序回滚——连带撤销同文件夹该时间点之后的所有未撤销整理
 // - 四个阶段：列表（phase=null）→ confirm（确认连带范围）→ running（进度）→ done（结果）
 import { useEffect, useState } from 'react'
+import { History, X, CheckCircle2, Loader2 } from 'lucide-react'
 
 export default function HistoryModal({ onClose, onRestored }) {
   const [history, setHistory] = useState(null) // null = 加载中
@@ -67,29 +68,34 @@ export default function HistoryModal({ onClose, onRestored }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl"
+        className="w-full max-w-lg animate-pop-in rounded-xl border border-line bg-surface p-6 shadow-xl"
       >
         {/* ===== 列表阶段 ===== */}
         {phase === null && (
           <>
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-800">📜 整理历史</h2>
+              <h2 className="inline-flex items-center gap-2 text-lg font-bold text-ink">
+                <History size={18} className="text-accent" />
+                整理历史
+              </h2>
               <button
                 onClick={onClose}
-                className="rounded-lg px-2 py-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                className="rounded-lg px-2 py-1 text-ink-3 transition hover:bg-sunken hover:text-ink-2"
               >
-                ✕
+                <X size={16} />
               </button>
             </div>
 
             {error && (
-              <p className="mb-3 rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-700">{error}</p>
+              <p className="mb-3 rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-700 dark:bg-red-400/10 dark:text-red-300">
+                {error}
+              </p>
             )}
 
             {history === null ? (
-              <p className="py-8 text-center text-gray-400">读取中…</p>
+              <p className="py-8 text-center text-ink-3">读取中…</p>
             ) : history.length === 0 ? (
-              <p className="py-8 text-center text-gray-400">还没有整理记录</p>
+              <p className="py-8 text-center text-ink-3">还没有整理记录</p>
             ) : (
               <ul className="max-h-[60vh] space-y-2 overflow-y-auto pr-1">
                 {history.map((item) => {
@@ -97,26 +103,26 @@ export default function HistoryModal({ onClose, onRestored }) {
                   return (
                     <li
                       key={item.fileName}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-4 py-3"
+                      className="flex items-center justify-between gap-3 rounded-lg border border-line px-4 py-3 transition-colors hover:bg-sunken"
                     >
                       <div className="min-w-0">
-                        <p className="flex items-center gap-2 text-sm text-gray-800">
+                        <p className="flex items-center gap-2 text-sm text-ink">
                           {fmt(item.createdAt)}
                           {item.undone && (
                             <span
                               title={item.undoneAt ? `撤销于 ${fmt(item.undoneAt)}` : undefined}
-                              className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500"
+                              className="rounded bg-sunken px-1.5 py-0.5 text-xs text-ink-3"
                             >
                               已撤销
                             </span>
                           )}
                           {item.failedCount > 0 && (
-                            <span className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-600">
+                            <span className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-600 dark:bg-red-400/10 dark:text-red-300">
                               {item.failedCount} 个失败
                             </span>
                           )}
                         </p>
-                        <p className="truncate text-xs text-gray-500" title={item.folderPath}>
+                        <p className="truncate text-xs text-ink-3" title={item.folderPath}>
                           {item.folderPath} · {item.moveCount} 个文件
                         </p>
                       </div>
@@ -124,7 +130,7 @@ export default function HistoryModal({ onClose, onRestored }) {
                         onClick={() => askRestore(item)}
                         disabled={!restorable}
                         title={restorable ? '恢复到这次整理之前' : '该时间点之后的整理都已撤销'}
-                        className="shrink-0 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-amber-700 transition hover:bg-amber-100 disabled:opacity-40"
+                        className="shrink-0 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-amber-700 transition hover:bg-amber-100 active:scale-[0.98] disabled:opacity-40 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300 dark:hover:bg-amber-400/20"
                       >
                         恢复
                       </button>
@@ -140,18 +146,18 @@ export default function HistoryModal({ onClose, onRestored }) {
         {phase === 'confirm' && pending && (
           <>
             {pending.chain.length === 1 ? (
-              <p className="text-gray-800">
+              <p className="text-ink">
                 将撤销 {fmt(pending.item.createdAt)} 的这次整理，把{' '}
                 {pending.chain[0].moveCount} 个文件移回原位。
               </p>
             ) : (
               <>
-                <p className="text-gray-800">
+                <p className="text-ink">
                   恢复到 {fmt(pending.item.createdAt)} 这次整理之前，需要按时间倒序连带撤销该文件夹之后的整理，共{' '}
                   {pending.chain.length} 次整理、
                   {pending.chain.reduce((s, h) => s + h.moveCount, 0)} 个文件将移回原位：
                 </p>
-                <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto rounded-lg bg-sunken px-3 py-2 text-sm text-ink-2">
                   {pending.chain.map((h) => (
                     <li key={h.fileName}>
                       {fmt(h.createdAt)} · {h.moveCount} 个文件
@@ -160,7 +166,7 @@ export default function HistoryModal({ onClose, onRestored }) {
                 </ul>
               </>
             )}
-            <p className="mt-2 text-xs text-gray-400">
+            <p className="mt-2 text-xs text-ink-3">
               已手动撤销过的整理会自动跳过；其他文件夹的整理记录不受影响。
             </p>
             <div className="mt-5 flex justify-end gap-3">
@@ -169,13 +175,13 @@ export default function HistoryModal({ onClose, onRestored }) {
                   setPhase(null)
                   setPending(null)
                 }}
-                className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-gray-700 shadow-sm transition hover:bg-gray-50"
+                className="rounded-lg border border-line bg-surface px-5 py-2.5 text-ink-2 shadow-sm transition hover:bg-sunken active:scale-[0.98]"
               >
                 取消
               </button>
               <button
                 onClick={handleRestore}
-                className="rounded-lg bg-amber-600 px-5 py-2.5 font-medium text-white shadow transition hover:bg-amber-700"
+                className="rounded-lg bg-amber-600 px-5 py-2.5 font-medium text-white shadow transition hover:bg-amber-700 active:scale-[0.98] dark:bg-amber-500 dark:text-amber-950 dark:hover:bg-amber-400"
               >
                 开始恢复{pending.chain.length > 1 ? `（连带撤销 ${pending.chain.length} 次）` : ''}
               </button>
@@ -186,11 +192,12 @@ export default function HistoryModal({ onClose, onRestored }) {
         {/* ===== 恢复中：进度条，遮罩不可关 ===== */}
         {phase === 'running' && (
           <>
-            <p className="text-gray-800">
+            <p className="inline-flex items-center gap-2 text-ink">
+              <Loader2 size={16} className="animate-spin text-amber-500" />
               正在恢复…
               {restoreProgress ? ` ${restoreProgress.current}/${restoreProgress.total}` : ''}
             </p>
-            <div className="mt-4 h-2 overflow-hidden rounded-full bg-gray-200">
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-sunken">
               <div
                 className="h-full rounded-full bg-amber-500 transition-all"
                 style={{
@@ -208,14 +215,15 @@ export default function HistoryModal({ onClose, onRestored }) {
           <>
             {result.ok ? (
               <>
-                <p className="text-gray-800">
-                  ✅ 恢复完成：已连带撤销 {result.restoredRecords} 次整理，移回 {result.restored}{' '}
+                <p className="inline-flex items-center gap-2 text-ink">
+                  <CheckCircle2 size={18} className="text-emerald-500" />
+                  恢复完成：已连带撤销 {result.restoredRecords} 次整理，移回 {result.restored}{' '}
                   个文件
                 </p>
                 {(result.skipped.length > 0 ||
                   result.renamed.length > 0 ||
                   result.keptFolders.length > 0) && (
-                  <ul className="mt-3 space-y-1 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                  <ul className="mt-3 space-y-1 rounded-lg bg-sunken px-3 py-2 text-sm text-ink-2">
                     {result.skipped.length > 0 && (
                       <li>{result.skipped.length} 个文件已不在原处，已跳过</li>
                     )}
@@ -229,12 +237,12 @@ export default function HistoryModal({ onClose, onRestored }) {
                 )}
               </>
             ) : (
-              <p className="text-red-700">恢复失败：{result.error}</p>
+              <p className="text-red-700 dark:text-red-300">恢复失败：{result.error}</p>
             )}
             <div className="mt-5 flex justify-end">
               <button
                 onClick={finishRestore}
-                className="rounded-lg bg-blue-600 px-5 py-2.5 font-medium text-white shadow transition hover:bg-blue-700"
+                className="rounded-lg bg-accent px-5 py-2.5 font-medium text-white shadow transition hover:bg-accent-hi active:scale-[0.98] dark:text-indigo-950"
               >
                 完成
               </button>
