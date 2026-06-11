@@ -123,7 +123,15 @@ function translateError(err) {
     return new Error('API Key 无效或已被撤销，请检查后重新设置')
   }
   if (err instanceof OpenAI.RateLimitError) {
-    return new Error('请求过于频繁，请稍后再试')
+    // Moonshot 的 429 有三种含义，按上游消息区分，避免把服务端过载/余额不足误报成"请求频繁"
+    const detail = String(err.message || '')
+    if (/overloaded/i.test(detail)) {
+      return new Error('Kimi 服务端当前过载，请稍后重试（不是本机请求频率问题）')
+    }
+    if (/quota|balance|not active|frozen/i.test(detail)) {
+      return new Error('账户配额或余额不足，请到 platform.moonshot.cn 检查账户状态')
+    }
+    return new Error('请求频率超出账户限制，请稍后再试')
   }
   if (err instanceof OpenAI.APIConnectionError) {
     return new Error('无法连接到 Kimi API，请检查网络')
