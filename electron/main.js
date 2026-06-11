@@ -5,7 +5,7 @@
 //
 // 安全说明：渲染进程（React 页面）不能直接访问 Node.js 的 fs/dialog 等能力，
 // 所有系统操作都在主进程完成，通过 preload.js 暴露的受限接口调用。
-const { app, BrowserWindow, ipcMain, dialog } = require('electron')
+const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron')
 const path = require('path')
 const fs = require('fs/promises')
 const { analyzeFiles, adjustPlan, testApiKey } = require('./ai')
@@ -401,6 +401,11 @@ ipcMain.handle('api-key:delete', () => {
 // Electron 初始化完成后创建窗口（root 检查未通过时已触发退出，不进入主界面）
 if (passedRootCheck) {
   app.whenReady().then(() => {
+    // 移除默认菜单栏（File/Edit/View…）：对本应用无用且不像成品。
+    // 副作用：Ctrl+R 刷新、Ctrl+Shift+I DevTools 等默认快捷键随菜单失效，
+    // 开发期需要 DevTools 时可临时注释本行或调 win.webContents.openDevTools()。
+    // macOS 的系统菜单承载 Cmd+C/V 等编辑快捷键，去掉会破坏复制粘贴，故仅非 mac 移除
+    if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
     createWindow()
 
     // macOS 习惯：点击 Dock 图标且没有窗口时，重新创建一个
