@@ -15,10 +15,13 @@ npm run build    # vite build → dist/
 npm start        # 以生产模式启动（加载 dist/，需先 build）
 ```
 
+注意：Vite 只热重载 `src/`；**`electron/`（主进程 + preload）改动必须重启 `npm run dev` 才生效**，否则跑的还是旧代码。
+
 没有测试框架和 lint 配置。验证方式：
 - 主进程代码改动后 `node --check electron/<file>.js`（CJS 语法检查）
 - 前端改动后 `npm run build` 确认可编译
 - `keyStore.js` 依赖 `app`/`safeStorage`，**只能在 Electron 环境测试**：写临时入口脚本用 `npx electron /tmp/test.js` 跑（先 `app.setPath('userData', 临时目录)` 避免污染真实数据）
+- 端到端实测 API 调用：临时脚本里 `app.setPath('userData', '~/.config/tidyfolder')` 指向真实目录，即可用已保存的密钥直接调 `analyzeFiles`（只读密钥、**绝不打印**；脚本里 require 项目内模块和 `node_modules/openai` 要用绝对路径，因为脚本在 /tmp）
 - 无头环境跑 `npm run dev` 时终端的 GetVSyncParameters GL 报错是无害的
 
 ## 架构
@@ -36,8 +39,12 @@ npm start        # 以生产模式启动（加载 dist/，需先 build）
 ```
 src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（electron/main.js）
   ├─ select-folder   → dialog + fs.readdir（withFileTypes，仅第一层）
-  ├─ analyze-files   → electron/ai.js（Kimi API 调用）
+  ├─ analyze-files   → electron/ai.js（Kimi API 流式调用）
   └─ api-key:*       → electron/keyStore.js（密钥存取）
+
+反向推送（主进程 → 渲染进程，唯一一处）：
+  analyze-progress 事件 —— 分析期间持续推送已接收字符数，
+  渲染进程经 window.api.onAnalyzeProgress(cb) 订阅（返回取消订阅函数）
 ```
 
 约定：IPC handler 一律返回 `{ ok: true, ... }` 或 `{ ok: false, error: 中文消息 }`，异常不裸穿 IPC；用户可见的错误信息全部是中文。
