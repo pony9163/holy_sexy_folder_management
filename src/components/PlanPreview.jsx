@@ -157,6 +157,9 @@ export default function PlanPreview({ plans, files, folderPath, onCancel, onOrga
         history,
       })
       if (res.ok) {
+        // 模型有时声称"已调整"但返回的方案和原来一模一样，诚实告知用户，避免看起来像没反应
+        const unchanged =
+          JSON.stringify(res.folders) === JSON.stringify(localPlans[activeIndex].folders)
         // 用调整后的 folders 替换当前方案（其他方案不动）
         setLocalPlans((prev) =>
           prev.map((plan, i) => (i === activeIndex ? { ...plan, folders: res.folders } : plan)),
@@ -166,7 +169,16 @@ export default function PlanPreview({ plans, files, folderPath, onCancel, onOrga
         // AI 回复上屏（content 展示 reply，raw 留给下一轮历史）
         setChats((prev) =>
           prev.map((list, i) =>
-            i === activeIndex ? [...list, { role: 'assistant', content: res.reply, raw: res.raw }] : list,
+            i === activeIndex
+              ? [
+                  ...list,
+                  {
+                    role: 'assistant',
+                    content: unchanged ? `${res.reply}（方案内容与调整前相同）` : res.reply,
+                    raw: res.raw,
+                  },
+                ]
+              : list,
           ),
         )
       } else {
