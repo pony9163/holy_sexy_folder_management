@@ -12,6 +12,7 @@ holy_sexy_folder_management——Electron + React 18 + Tailwind CSS v4 桌面应
 npm run dev      # 同时启动 Vite(5173, strictPort) 和 Electron 窗口（concurrently + wait-on）
 npm run build    # vite build → dist/
 npm start        # 以生产模式启动（加载 dist/，需先 build）
+npm run dist     # vite build + electron-builder 打 Linux deb → release/
 ```
 
 注意：Vite 只热重载 `src/`；**`electron/`（主进程 + preload）改动必须重启 `npm run dev` 才生效**，否则跑的还是旧代码。
@@ -60,7 +61,7 @@ src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（elec
 
 ### 文件整理安全不变量（electron/fileOps.js，最高优先级）
 
-- **零删除**：全项目新代码不调用任何删除 API（unlink/rm/rmdir 等）。映射表撤销后只改写 JSON 标 `undone: true` 不删文件；空分类文件夹撤销后保留（前端提示用户手动删）；损坏的记录文件跳过不删
+- **零删除（针对用户文件）**：文件整理相关代码不调用任何删除 API（unlink/rm/rmdir 等）。映射表撤销后只改写 JSON 标 `undone: true` 不删文件；空分类文件夹撤销后保留（前端提示用户手动删）；损坏的记录文件跳过不删。唯一例外是 keyStore.js 删应用自己的密钥文件（用户主动删除密钥、解密失败清理损坏文件），不触碰用户文件
 - **只用 `fs.rename`** 移动（同盘原子操作）；EXDEV 跨设备时报错跳过，**绝不退化为复制后删除**
 - **映射表先落盘再动文件**：`organize` 在第一次 rename 之前把完整计划写入 `userData/organize-logs/organize-<ISO时间戳>.json`（`:` `.` 换 `-`，**末尾带 Z**——`organize:restore` 的文件名校验正则必须匹配这个格式）；每条 rename 成功/失败后立刻改写 JSON。撤销对"rename 成功但 JSON 未更新"的崩溃窗口有容错（to 不存在按 skipped 处理）
 - **`checkFolderSafety` 是唯一安全卡口**（organize:run、undoRecord、restoreTo 都先过它），拒绝四类目录：文件系统根目录、系统目录黑名单（前缀边界匹配，Linux/Mac/Windows 各一份）、用户主文件夹本身（子文件夹允许）、隐藏文件夹（路径任一段以 `.` 开头，含 ~/.config 及其子目录）。新增保护规则只改这一个函数
@@ -84,6 +85,13 @@ src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（elec
 - 系统提示词要求严格 JSON（`{ folders: [{ name, files, reason }] }`）；`parsePlan` 会剥掉模型偶尔包的 ```json 栅栏再 parse，并校验 `folders` 是数组
 - `testApiKey` 用 `client.models.list()` 验证密钥——零 token 成本，改动时别换成会计费的接口
 - SDK 错误统一经 `translateError` 翻译成中文（用类型化异常 `instanceof`，不要字符串匹配）
+
+### 打包与 CI
+
+- electron-builder 配置在 `package.json` 的 `build` 字段（appId `com.pony9163.holy-sexy-folder-management`，产物输出 `release/`，图标 `build/icon.png`）；打包只收 `dist/**`、`electron/**`、`package.json`
+- **Linux deb 本地打**（`npm run dist`）；**mac dmg 只能走 CI**（本地是 Linux 构建不了 mac 产物）：`.github/workflows/build-mac.yml`，手动触发或推 `v*` 标签，在 macOS runner 上打 arm64 + x64 的 dmg，artifact 名 `mac-dmg`
+- CI 里 `CSC_IDENTITY_AUTO_DISCOVERY: 'false'` 是故意的：没有签名证书，跳过签名（产物未签名，用户需右键打开放行）；以后有 Developer ID 证书再接公证
+- workflow 用的官方 actions 均为 v5（checkout/setup-node/upload-artifact），别降回 v4（Node 20 弃用警告）
 
 ### 前端
 
