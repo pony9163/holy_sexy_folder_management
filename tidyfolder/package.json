@@ -1,0 +1,25 @@
+{
+  "name": "tidyfolder",
+  "version": "1.0.0",
+  "description": "TidyFolder —— 选择一个文件夹，查看其第一层文件的名称、类型、大小和修改日期",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "build": "vite build",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "openai": "^6.42.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "electron": "^33.2.0",
+    "tailwindcss": "^4.1.0",
+    "vite": "^6.0.0",
+    "wait-on": "^8.0.1"
+  }
+}
