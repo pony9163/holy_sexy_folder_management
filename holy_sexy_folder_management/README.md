@@ -6,7 +6,7 @@
 
 ```bash
 # 1. 进入项目目录
-cd tidyfolder
+cd holy_sexy_folder_management
 
 # 2. 安装依赖（首次需要下载 Electron 二进制，可能较慢）
 npm install
@@ -45,7 +45,7 @@ npm run dev
 ## 项目结构
 
 ```
-tidyfolder/
+holy_sexy_folder_management/
 ├── package.json          # 依赖与脚本，"main" 指向 Electron 主进程
 ├── vite.config.js        # Vite 配置（React + Tailwind 插件）
 ├── index.html            # 页面入口

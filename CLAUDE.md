@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概况
 
-holy_sexy_folder_management——Electron + React 18 + Tailwind CSS v4 桌面应用：选择文件夹后列出其**第一层**条目（设计上不递归），并可调用 Kimi API（Moonshot）生成文件分类方案。实际项目在 `tidyfolder/` 子目录，所有命令都在那里执行。代码注释统一用中文，新代码保持此约定。
+holy_sexy_folder_management——Electron + React 18 + Tailwind CSS v4 桌面应用：选择文件夹后列出其**第一层**条目（设计上不递归），并可调用 Kimi API（Moonshot）生成文件分类方案。实际项目在 `holy_sexy_folder_management/` 子目录，所有命令都在那里执行。代码注释统一用中文，新代码保持此约定。
 
 ## 常用命令
 
 ```bash
-cd tidyfolder
+cd holy_sexy_folder_management
 npm run dev      # 同时启动 Vite(5173, strictPort) 和 Electron 窗口（concurrently + wait-on）
 npm run build    # vite build → dist/
 npm start        # 以生产模式启动（加载 dist/，需先 build）
