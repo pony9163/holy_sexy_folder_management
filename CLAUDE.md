@@ -23,6 +23,7 @@ npm run dist     # vite build + electron-builder 打 Linux deb → release/
 - `fileOps.js` 不依赖 Electron，可用纯 Node 脚本实测：/tmp 下 `fs.mkdtemp` 建临时文件夹和 logDir，绝对路径 require 后直接调 `organize`/`undoOrganize`/`restoreTo` 断言文件位置与映射表内容（已有先例：/tmp/test-organize.js、/tmp/test-restore.js、/tmp/test-safety.js，会话间可能已被清理）
 - `keyStore.js` 依赖 `app`/`safeStorage`，**只能在 Electron 环境测试**：写临时入口脚本用 `npx electron /tmp/test.js` 跑（先 `app.setPath('userData', 临时目录)` 避免污染真实数据）
 - 端到端实测 API 调用：临时脚本里 `app.setPath('userData', '~/.config/holy_sexy_folder_management')` 指向真实目录，即可用已保存的密钥直接调 `analyzeFiles`（只读密钥、**绝不打印**；脚本里 require 项目内模块和 `node_modules/openai` 要用绝对路径，因为脚本在 /tmp）
+- **UI 端到端验证**（已验证可行的套路，先例 /tmp/test-adjust-ui.js、/tmp/test-theme-shots.js）：临时 electron 脚本里①补丁 `dialog.showOpenDialog` 返回固定测试目录（原生对话框没法脚本点）；②补丁 `BrowserWindow.prototype.loadURL` 改为 loadFile dist/index.html（需先 `npm run build`）；③要避免耗 API 时，在 require main.js **之前** require ai.js 并覆写其导出函数（main.js 解构到的是同一缓存对象）；④require 真实 main.js，然后用 `win.webContents.executeJavaScript` 驱动 DOM（按钮按 textContent 找、React 输入框用原生 value setter + dispatch input 事件）、`capturePage()` 截图后用 Read 工具目检。测试残留的 localStorage 记得清
 - 无头环境跑 `npm run dev` 时终端的 GetVSyncParameters GL 报错是无害的
 
 ## 架构
@@ -83,14 +84,20 @@ src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（elec
 
 ### Kimi API（electron/ai.js）
 
-- 用 `openai` SDK 走 Moonshot 的 OpenAI 兼容接口：`new OpenAI({ apiKey, baseURL: 'https://api.moonshot.cn/v1' })`
+- 用 `openai` SDK 走 Moonshot 的 OpenAI 兼容接口（baseURL `https://api.moonshot.cn/v1`）；client 实例经 `getClient()` 缓存复用（keep-alive 连接池省握手、降首响应延迟，换密钥自动重建），**不要改回每次 new OpenAI**
 - 模型是 `moonshot-v1-auto`，`temperature: 0.3`；系统提示词作为 `messages` 第一条（`role: 'system'`）。**不要换回 kimi-k2.6 / k2.5**：它们是思考型模型，同样任务 ≈30s（v1-auto ≈4s），且 k2.6 只接受 temperature=1
 - 调用是流式的（`stream: true`，共用 `streamCompletion`）：`analyzeFiles(files, onProgress)` 边接收边回调字符数，main.js 经 `analyze-progress` 事件推给渲染进程显示进度
 - 分析的系统提示词要求一次返回恰好三套思路不同的方案，严格 JSON（`{ plans: [{ name, folders: [{ name, files, reason }] }] }`）；`parsePlans` 剥掉模型偶尔包的 ```json 栅栏再 parse，校验 plans/folders 结构，方案名缺失或重复时回退「方案一/二/三」（前端 Tab 的 key 是方案名，必须唯一）
 - **每套方案必须独立覆盖全部文件**（三套是三选一的备选项，不是把文件分摊到三套里）：提示词已强调，但模型偶尔仍漏个别文件，`fillMissingFiles` 在分析后把每套未覆盖的文件归入「其他」兜底分类。对话调整**故意不做**这个兜底——用户可能就是要求把某些文件从方案里去掉
 - `adjustPlan({ files, plan, history }, onProgress)`：按用户自然语言要求改写一套方案，返回 `{ reply, folders, raw }`；history 里 assistant 消息发上一轮的 `raw` 原始 JSON（让模型看到自己的输出），进度走独立的 `adjust-progress`
-- `testApiKey` 用 `client.models.list()` 验证密钥——零 token 成本，改动时别换成会计费的接口
-- SDK 错误统一经 `translateError` 翻译成中文（用类型化异常 `instanceof`，不要字符串匹配）
+- `testApiKey` 用 `client.models.list()` 验证密钥——零 token 成本，改动时别换成会计费的接口（它测新 key，不走 getClient 缓存）
+- SDK 错误统一经 `translateError` 翻译成中文（按类型化异常 `instanceof` 分发）。**Moonshot 的 429 有三种含义**，按上游消息关键词区分后再报：engine overloaded（服务端过载，非用户问题）/ quota、balance、frozen（配额余额）/ 其余才是真频率超限——别简化回笼统的"请求过于频繁"
+- 文件数量保护的阈值 **300 在两处**：前端 `App.jsx` 的 `LARGE_FILE_THRESHOLD`（超过先弹确认框）和 `ai.js` 解析失败时的提示判断（CJS/ESM 双模块体系无法共享常量），改阈值要两处同步
+
+### 主进程窗口行为（electron/main.js）
+
+- **非 mac 平台移除默认菜单栏**（`Menu.setApplicationMenu(null)`）：mac 必须保留——系统菜单承载 Cmd+C/V 等编辑快捷键，删掉会坏复制粘贴。副作用：Ctrl+R / Ctrl+Shift+I 等默认快捷键随菜单失效，开发要 DevTools 临时注释该行
+- 窗口 `backgroundColor: '#17181c'`（与默认暗主题 --canvas 一致）+ `show: false` + `ready-to-show` 再显示：防启动白闪，别当成多余配置清理掉
 
 ### 打包与 CI
 
