@@ -1,6 +1,6 @@
 {
   "name": "tidyfolder",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "TidyFolder —— 选择一个文件夹，查看其第一层文件的名称、类型、大小和修改日期",
   "main": "electron/main.js",
   "scripts": {
