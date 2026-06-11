@@ -1,73 +1,90 @@
 # 📂 holy_sexy_folder_management
 
-一个用 **Electron + React + Tailwind CSS** 构建的桌面小工具：选择一个文件夹，列出其**第一层**所有文件和子文件夹的名称、类型、大小和修改日期（不递归进入子文件夹），并可调用 **Claude API** 生成智能分类方案。
+一个用 **Electron + React + Tailwind CSS** 构建的桌面文件整理工具：
+
+1. 选择一个文件夹，列出其**第一层**所有文件和子文件夹（不递归）
+2. 调用 **Kimi API（Moonshot）** 生成智能分类方案，预览并可逐个排除文件
+3. 确认后**真正移动文件**到分类子文件夹（同盘 `rename`，不是复制删除）
+4. 随时**撤销上次整理**，或在 **📜 整理历史**中回滚到任意一次整理之前
 
 ## 运行步骤
 
 ```bash
-# 1. 进入项目目录
-cd holy_sexy_folder_management
-
-# 2. 安装依赖（首次需要下载 Electron 二进制，可能较慢）
+# 1. 安装依赖（首次需要下载 Electron 二进制，可能较慢）
 npm install
 
-# 3. 启动开发模式：同时启动 Vite 开发服务器和 Electron 窗口
+# 2. 启动开发模式：同时启动 Vite 开发服务器和 Electron 窗口
 npm run dev
 ```
 
 窗口弹出后，点击右上角「选择文件夹」按钮即可浏览文件。
 
-要使用「✨ 分析」功能，点右上角 **⚙️ 设置**，填入你的 Anthropic API Key（在 platform.claude.com 生成，`sk-ant-` 开头），可点「测试连接」验证（不消耗 token）。
+要使用「✨ 分析」功能，点右上角 **⚙️ 设置**，填入你的 Moonshot API Key（在 platform.moonshot.cn 生成，`sk-` 开头），可点「测试连接」验证（不消耗 token）。
 
-> 开发者备选：也可以用环境变量 `export ANTHROPIC_API_KEY=sk-ant-...` 再启动，应用内设置的密钥优先级更高。
+> 开发者备选：也可以用环境变量 `export MOONSHOT_API_KEY=sk-...` 再启动，应用内设置的密钥优先级更高。
 
-## ✨ 分析功能（Claude API）
+## 使用流程
 
-选好文件夹后点「分析」按钮，应用会把文件清单（文件名、类型、大小、修改日期）发给 Claude（模型 `claude-sonnet-4-6`），由它返回一个 JSON 分类方案：
+1. **选择文件夹** → 表格展示第一层条目（名称、类型、大小、修改日期）
+2. **✨ 分析** → 文件清单发给 Kimi（模型 `moonshot-v1-auto`，流式返回、实时显示进度），得到分类方案预览：每个新文件夹一张卡片，附 AI 的分类理由，每个文件可「排除/恢复」
+3. **确认整理** → 弹窗确认后开始移动，实时进度条，完成显示「已整理 XX 个文件」（个别失败会列出原因，不影响其他文件）
+4. **↩️ 撤销上次整理** → 按移动前保存的映射表把所有文件移回原位
+5. **📜 整理历史** → 列出每次整理的快照（时间、文件夹、文件数、状态），可恢复到任意一次整理之前（同一文件夹之后的整理会按时间倒序连带撤销，确认时会明确告知范围）
 
-```json
-{ "folders": [ { "name": "图片", "files": ["a.png", "b.jpg"], "reason": "常见图片格式" } ] }
-```
+## 🛡️ 文件安全设计
 
-当前阶段结果通过 `console.log` 打印在两个地方：
-- 运行 `npm run dev` 的**终端**（主进程打印）
-- Electron 窗口的 **DevTools 控制台**（Ctrl+Shift+I 打开）
+移动文件是危险操作，安全是本工具的最高优先级：
+
+- **先记录、后动手**：每次整理前，完整的「原路径 → 新路径」映射表先写入应用数据目录（带时间戳的 JSON），之后才开始移动；每移动一个文件立刻同步记录状态
+- **零删除**：整个应用不调用任何删除文件的 API。移动只用 `fs.rename`（同磁盘原子操作），跨磁盘场景直接报错跳过，绝不退化为「复制后删除」；撤销后历史记录和空分类文件夹也只标记/保留，不删除
+- **重名不覆盖**：目标位置已有同名文件时自动加 ` (1)`、` (2)` 后缀，任何情况下不覆盖现有文件（撤销时同理）
+- **危险目录拒绝整理**：系统目录(`/usr` `/etc` `/System` 等)、文件系统根目录、用户主文件夹本身、隐藏文件夹（如 `~/.config`）一律拒绝
+- **拒绝 root 运行**：用 sudo/root 启动时弹窗提示并退出，防止误操作损坏系统文件、文件归属变 root
+- **不信任任何输入**：AI 返回的文件夹名/文件名在主进程逐一校验，杜绝路径穿越；恢复操作的记录文件名三重校验
 
 ## 🔒 API Key 安全设计
 
 - **加密存储**：密钥用 Electron `safeStorage`（macOS Keychain / Windows DPAPI / Linux libsecret）做操作系统级加密后存在本机 `userData/api-key.enc`，文件权限 600
 - **Linux 注意**：需要系统密钥环（gnome-keyring 或 kwallet）才能持久化；没有密钥环时密钥只保存在内存中，本次运行有效，界面会明确提示
-- **不暴露给页面**：密钥只在保存时单向传入主进程；状态查询只返回末 4 位掩码（如 `sk-ant-…f3Kq`），渲染进程拿不到完整密钥
+- **不暴露给页面**：密钥只在保存时单向传入主进程；状态查询只返回末 4 位掩码，渲染进程拿不到完整密钥
 - **不进日志**：终端和 DevTools 的任何输出都不包含密钥
 - **可彻底删除**：设置弹窗里的「删除密钥」会清除内存缓存并删除加密文件
-- **只发往官方**：调用时密钥仅用于直连 Anthropic 官方接口 `api.anthropic.com`，不经任何中转
+- **只发往官方**：调用时密钥仅用于直连 Moonshot 官方接口 `api.moonshot.cn`，不经任何中转
 
 ## 项目结构
 
 ```
 holy_sexy_folder_management/
-├── package.json          # 依赖与脚本，"main" 指向 Electron 主进程
-├── vite.config.js        # Vite 配置（React + Tailwind 插件）
-├── index.html            # 页面入口
-├── electron/
-│   ├── main.js           # 主进程：创建窗口、弹文件夹对话框、读取目录第一层
-│   └── preload.js        # 安全桥：向页面暴露 window.api.selectFolder()
-└── src/
-    ├── main.jsx          # React 挂载入口
-    ├── index.css         # 引入 Tailwind
-    ├── App.jsx           # 主界面（按钮 + 状态管理）
+├── package.json              # 依赖与脚本，"main" 指向 Electron 主进程
+├── vite.config.js            # Vite 配置（React + Tailwind 插件）
+├── index.html                # 页面入口
+├── electron/                 # 主进程侧（CommonJS）
+│   ├── main.js               # 主进程：窗口、root 保护、全部 IPC handler
+│   ├── preload.js            # 安全桥：向页面暴露 window.api.*
+│   ├── ai.js                 # Kimi API 调用（流式）与方案解析
+│   ├── fileOps.js            # 文件移动/撤销/历史回滚核心 + 安全检查
+│   └── keyStore.js           # API 密钥加密存取
+└── src/                      # 渲染进程侧（ESM + JSX）
+    ├── main.jsx              # React 挂载入口
+    ├── index.css             # 引入 Tailwind
+    ├── App.jsx               # 主界面（按钮、状态管理、撤销入口）
     ├── components/
-    │   └── FileTable.jsx # 文件列表表格
+    │   ├── FileTable.jsx     # 文件列表表格
+    │   ├── PlanPreview.jsx   # 分类方案预览（卡片树、排除、确认整理）
+    │   ├── HistoryModal.jsx  # 整理历史弹窗（快照列表、恢复）
+    │   └── ApiKeyModal.jsx   # API Key 设置弹窗
     └── utils/
-        └── format.js     # 大小/日期格式化工具
+        └── format.js         # 大小/日期格式化工具
 ```
 
 ## 工作原理
 
-1. 页面（渲染进程）调用 `window.api.selectFolder()`（由 `preload.js` 暴露）
-2. 主进程收到 IPC 请求，用 `dialog.showOpenDialog` 弹出系统文件夹选择框
-3. 主进程用 `fs.readdir`（不递归）+ `fs.stat` 读取第一层条目信息并返回
-4. React 把结果渲染成表格；文件夹排在前面，大小列显示「—」
+渲染进程没有 Node 能力（contextIsolation），一切系统操作都经 `preload.js` 暴露的 `window.api` 走 IPC 到主进程：
+
+1. **浏览**：`selectFolder()` → 主进程弹系统对话框 → `fs.readdir`（仅第一层）+ `fs.stat` 返回条目
+2. **分析**：`analyzeFiles()` → 主进程流式调用 Kimi → 进度事件实时推回页面 → 返回 JSON 分类方案
+3. **整理**：`organize.run()` → 主进程安全检查 → 映射表落盘 → 逐文件 `rename` 并推送进度 → 返回结果和刷新后的文件列表
+4. **撤销/恢复**：按映射表逆向 `rename`；历史恢复 = 把目标时间点之后的同文件夹记录按时间倒序逐份撤销
 
 ## 其他命令
 
