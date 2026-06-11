@@ -21,6 +21,38 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('analyze-progress', listener)
   },
 
+  // 文件整理（移动 + 撤销），对应 main.js 中的 organize:* handler
+  organize: {
+    // 执行整理：{ folderPath, groups: [{ folderName, fileNames }] }
+    run: (payload) => ipcRenderer.invoke('organize:run', payload),
+    // 撤销最近一次整理
+    undo: () => ipcRenderer.invoke('organize:undo'),
+    // 查询是否有可撤销记录（供按钮显隐）
+    getUndoable: () => ipcRenderer.invoke('organize:get-undoable'),
+    // 订阅整理进度 { current, total }，返回取消订阅函数
+    onProgress: (callback) => {
+      const listener = (_event, progress) => callback(progress)
+      ipcRenderer.on('organize:progress', listener)
+      return () => ipcRenderer.removeListener('organize:progress', listener)
+    },
+    // 订阅撤销进度 { current, total }，返回取消订阅函数
+    onUndoProgress: (callback) => {
+      const listener = (_event, progress) => callback(progress)
+      ipcRenderer.on('organize:undo-progress', listener)
+      return () => ipcRenderer.removeListener('organize:undo-progress', listener)
+    },
+    // 查询全部整理历史（供历史弹窗）
+    getHistory: () => ipcRenderer.invoke('organize:history'),
+    // 顺序回滚到指定整理之前（logFileName 来自 getHistory 返回的 fileName）
+    restore: (logFileName) => ipcRenderer.invoke('organize:restore', logFileName),
+    // 订阅恢复进度 { current, total }，返回取消订阅函数
+    onRestoreProgress: (callback) => {
+      const listener = (_event, progress) => callback(progress)
+      ipcRenderer.on('organize:restore-progress', listener)
+      return () => ipcRenderer.removeListener('organize:restore-progress', listener)
+    },
+  },
+
   // API 密钥管理（密钥只单向传入主进程，状态查询绝不返回完整密钥）
   apiKey: {
     getStatus: () => ipcRenderer.invoke('api-key:get-status'),

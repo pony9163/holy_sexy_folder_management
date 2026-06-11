@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概况
 
-holy_sexy_folder_management——Electron + React 18 + Tailwind CSS v4 桌面应用：选择文件夹后列出其**第一层**条目（设计上不递归），并可调用 Kimi API（Moonshot）生成文件分类方案。项目就在仓库根目录，所有命令都在根目录执行。代码注释统一用中文，新代码保持此约定。
+holy_sexy_folder_management——Electron + React 18 + Tailwind CSS v4 桌面应用：选择文件夹后列出其**第一层**条目（设计上不递归），调用 Kimi API（Moonshot）生成文件分类方案，确认后真正移动文件（`fs.rename`），并支持撤销和按历史快照顺序回滚。项目就在仓库根目录，所有命令都在根目录执行。代码注释统一用中文，新代码保持此约定。
 
 ## 常用命令
 
@@ -19,6 +19,7 @@ npm start        # 以生产模式启动（加载 dist/，需先 build）
 没有测试框架和 lint 配置。验证方式：
 - 主进程代码改动后 `node --check electron/<file>.js`（CJS 语法检查）
 - 前端改动后 `npm run build` 确认可编译
+- `fileOps.js` 不依赖 Electron，可用纯 Node 脚本实测：/tmp 下 `fs.mkdtemp` 建临时文件夹和 logDir，绝对路径 require 后直接调 `organize`/`undoOrganize`/`restoreTo` 断言文件位置与映射表内容（已有先例：/tmp/test-organize.js、/tmp/test-restore.js、/tmp/test-safety.js，会话间可能已被清理）
 - `keyStore.js` 依赖 `app`/`safeStorage`，**只能在 Electron 环境测试**：写临时入口脚本用 `npx electron /tmp/test.js` 跑（先 `app.setPath('userData', 临时目录)` 避免污染真实数据）
 - 端到端实测 API 调用：临时脚本里 `app.setPath('userData', '~/.config/holy_sexy_folder_management')` 指向真实目录，即可用已保存的密钥直接调 `analyzeFiles`（只读密钥、**绝不打印**；脚本里 require 项目内模块和 `node_modules/openai` 要用绝对路径，因为脚本在 /tmp）
 - 无头环境跑 `npm run dev` 时终端的 GetVSyncParameters GL 报错是无害的
@@ -37,16 +38,36 @@ npm start        # 以生产模式启动（加载 dist/，需先 build）
 
 ```
 src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（electron/main.js）
-  ├─ select-folder   → dialog + fs.readdir（withFileTypes，仅第一层）
-  ├─ analyze-files   → electron/ai.js（Kimi API 流式调用）
-  └─ api-key:*       → electron/keyStore.js（密钥存取）
+  ├─ select-folder           → dialog + readFolderEntries（fs.readdir withFileTypes，仅第一层）
+  ├─ analyze-files           → electron/ai.js（Kimi API 流式调用）
+  ├─ organize:run            → electron/fileOps.js organize（创建分类文件夹 + fs.rename 移动）
+  ├─ organize:undo           → fileOps undoOrganize（撤销最近一次未撤销的整理）
+  ├─ organize:get-undoable   → fileOps findLatestUndoable（撤销按钮显隐）
+  ├─ organize:history        → fileOps listHistory（历史弹窗的快照摘要列表）
+  ├─ organize:restore        → fileOps restoreTo（顺序回滚到某次整理之前）
+  └─ api-key:*               → electron/keyStore.js（密钥存取）
 
-反向推送（主进程 → 渲染进程，唯一一处）：
-  analyze-progress 事件 —— 分析期间持续推送已接收字符数，
-  渲染进程经 window.api.onAnalyzeProgress(cb) 订阅（返回取消订阅函数）
+反向推送（主进程 → 渲染进程）均为「订阅函数返回取消订阅函数」模式（参考 onAnalyzeProgress）：
+  analyze-progress           —— 分析期间推送已接收字符数（number）
+  organize:progress          —— 整理移动进度 { current, total }
+  organize:undo-progress     —— 撤销进度 { current, total }
+  organize:restore-progress  —— 历史恢复进度 { current, total }
+  进度 channel 故意分开不复用：App 全局订阅 undo-progress 驱动撤销按钮文案，
+  HistoryModal 订阅 restore-progress，复用会状态串台
 ```
 
-约定：IPC handler 一律返回 `{ ok: true, ... }` 或 `{ ok: false, error: 中文消息 }`，异常不裸穿 IPC；用户可见的错误信息全部是中文。
+约定：IPC handler 一律返回 `{ ok: true, ... }` 或 `{ ok: false, error: 中文消息 }`，异常不裸穿 IPC；用户可见的错误信息全部是中文。`organize:run`/`organize:undo` 返回值附带刷新后的 `files` 列表（`organize:restore` 在目录可读时附带），前端直接 setFiles 免二次往返。
+
+### 文件整理安全不变量（electron/fileOps.js，最高优先级）
+
+- **零删除**：全项目新代码不调用任何删除 API（unlink/rm/rmdir 等）。映射表撤销后只改写 JSON 标 `undone: true` 不删文件；空分类文件夹撤销后保留（前端提示用户手动删）；损坏的记录文件跳过不删
+- **只用 `fs.rename`** 移动（同盘原子操作）；EXDEV 跨设备时报错跳过，**绝不退化为复制后删除**
+- **映射表先落盘再动文件**：`organize` 在第一次 rename 之前把完整计划写入 `userData/organize-logs/organize-<ISO时间戳>.json`（`:` `.` 换 `-`，**末尾带 Z**——`organize:restore` 的文件名校验正则必须匹配这个格式）；每条 rename 成功/失败后立刻改写 JSON。撤销对"rename 成功但 JSON 未更新"的崩溃窗口有容错（to 不存在按 skipped 处理）
+- **`checkFolderSafety` 是唯一安全卡口**（organize:run、undoRecord、restoreTo 都先过它），拒绝四类目录：文件系统根目录、系统目录黑名单（前缀边界匹配，Linux/Mac/Windows 各一份）、用户主文件夹本身（子文件夹允许）、隐藏文件夹（路径任一段以 `.` 开头，含 ~/.config 及其子目录）。新增保护规则只改这一个函数
+- **渲染进程输入不可信**：organize:run 对 folderPath 先 `fs.realpath`（防符号链接绕过黑名单）再查安全；所有分类名/文件名校验 `path.basename(x) === x` 且非 `.`/`..`；organize:restore 的 logFileName 三重校验（纯文件名 + 严格正则 + resolve 后确认在 logDir 内）
+- 路径拼接一律 `path.join`/`path.resolve`，不手写分隔符；root 检查双保险（启动时 `ensureNotRoot` 弹窗退出 + organize/undo handler 内再拦一道）
+- 目标重名自动加 ` (1)`、` (2)`…（`uniqueName`，rename 前还会复核一次防 POSIX rename 静默覆盖）；单文件失败跳过记录不中止，恢复统一交给显式撤销
+- **顺序回滚语义**（restoreTo）：恢复到第 N 次之前 = 同 folderPath（字符串严格相等即可，落盘前已 realpath 规范化，勿对历史路径再 realpath——目录可能已不存在）、createdAt >= 目标、未撤销的记录按时间倒序逐份撤销；其他文件夹不受影响
 
 ### API 密钥安全不变量（改动相关代码时必须维持）
 
@@ -69,3 +90,6 @@ src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（elec
 - Tailwind v4 走 `@tailwindcss/vite` 插件：**没有也不需要** `tailwind.config.js`/PostCSS 配置，入口只有 `src/index.css` 的 `@import "tailwindcss"`
 - `vite.config.js` 的 `base: './'` 是生产模式 `file://` 加载 dist 所必需的，别删
 - 文件列表排序规则在 `FileTable.jsx`：文件夹在前，组内 `localeCompare(name, 'zh')`；文件夹的大小列显示 `—`
+- `PlanPreview.jsx`：方案按数组渲染（多方案 Tab 预留），每方案独立排除集合 `excluded = plans.map(() => new Set())`；整理弹窗为三态状态机 confirm → running → done，发给主进程的 groups 由 `resolvedFolders` 过滤排除项得出
+- `HistoryModal.jsx`：历史快照弹窗，四阶段（列表/confirm/running/done）；"连带撤销 N 次"的链条由前端用 `getHistory` 返回的摘要自行计算（同 folderPath、createdAt >= 目标、未撤销），与主进程 `restoreTo` 的链条定义保持一致——改一边必须同步另一边
+- 整理/撤销/恢复完成后的列表刷新都走 handler 返回的 `files`（撤销/恢复要先比对返回的 `folderPath` 是否等于当前展示的文件夹）

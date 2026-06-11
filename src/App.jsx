@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import FileTable from './components/FileTable'
 import ApiKeyModal from './components/ApiKeyModal'
 import PlanPreview from './components/PlanPreview'
+import HistoryModal from './components/HistoryModal'
 
 export default function App() {
   const [folderPath, setFolderPath] = useState(null) // 当前选中的文件夹路径
@@ -18,6 +19,10 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false)  // 是否打开 API Key 设置弹窗
   const [keyStatus, setKeyStatus] = useState(null)   // 密钥状态（只含掩码等元信息）
   const [plans, setPlans] = useState(null)            // 分析得到的整理方案数组（null = 不显示预览）
+  const [undoable, setUndoable] = useState(null)      // 可撤销记录 { undoable, info }（null = 未查询）
+  const [undoing, setUndoing] = useState(false)       // 是否正在撤销
+  const [undoProgress, setUndoProgress] = useState(null) // 撤销进度 { current, total }
+  const [showHistory, setShowHistory] = useState(false)  // 是否打开整理历史弹窗
 
   // 启动时查一次密钥状态，用于在界面上给出引导提示
   useEffect(() => {
@@ -26,6 +31,18 @@ export default function App() {
 
   // 订阅分析进度事件（主进程流式接收 Kimi 回复时持续推送），卸载时取消订阅
   useEffect(() => window.api.onAnalyzeProgress(setProgress), [])
+
+  // 订阅撤销进度事件（主进程每移回一个文件推送一次）
+  useEffect(() => window.api.organize.onUndoProgress(setUndoProgress), [])
+
+  // 查询是否有可撤销的整理记录（启动时 + 每次整理/撤销完成后刷新）
+  async function refreshUndoable() {
+    const res = await window.api.organize.getUndoable()
+    if (res.ok) setUndoable(res)
+  }
+  useEffect(() => {
+    refreshUndoable()
+  }, [])
 
   // 点击按钮：通过 preload 暴露的 window.api 让主进程弹出对话框并读取目录
   async function handleSelectFolder() {
@@ -64,6 +81,71 @@ export default function App() {
     }
   }
 
+  // 整理完成（PlanPreview 弹窗里点"完成"）：刷新列表、回到文件表格视图、显示结果提示
+  function handleOrganized(result) {
+    if (result.files) setFiles(result.files)
+    setPlans(null)
+    setAnalyzeStatus({
+      ok: true,
+      message: `已整理 ${result.moved} 个文件${
+        result.errors.length > 0 ? `，${result.errors.length} 个未能移动` : ''
+      }`,
+    })
+    refreshUndoable()
+  }
+
+  // 点击「撤销上次整理」：按最近的映射表把文件移回原位
+  async function handleUndo() {
+    setUndoing(true)
+    setUndoProgress(null)
+    try {
+      const res = await window.api.organize.undo()
+      if (res.ok) {
+        // 撤销的是当前展示的文件夹时才刷新列表
+        if (res.files && res.folderPath === folderPath) {
+          setFiles(res.files)
+          setPlans(null) // 文件已变动，旧预览作废
+        }
+        const extra = []
+        if (res.skipped.length > 0) extra.push(`${res.skipped.length} 个文件已不在原处，已跳过`)
+        if (res.renamed.length > 0)
+          extra.push(`${res.renamed.length} 个文件因原位置被占用，已加 (1) 后缀恢复`)
+        if (res.keptFolders.length > 0)
+          extra.push('为安全起见，整理时创建的分类文件夹已保留，如不需要可手动删除')
+        setAnalyzeStatus({
+          ok: true,
+          message: `撤销完成：已移回 ${res.restored} 个文件${extra.length > 0 ? '；' + extra.join('；') : ''}`,
+        })
+      } else {
+        setAnalyzeStatus({ ok: false, message: res.error })
+      }
+    } finally {
+      setUndoing(false)
+      refreshUndoable()
+    }
+  }
+
+  // 历史弹窗里恢复完成：刷新列表（仅当恢复的是当前展示的文件夹）、提示结果、刷新可撤销状态
+  function handleRestored(result) {
+    if (result.files && result.folderPath === folderPath) {
+      setFiles(result.files)
+      setPlans(null) // 文件已变动，旧预览作废
+    }
+    const extra = []
+    if (result.skipped.length > 0) extra.push(`${result.skipped.length} 个文件已不在原处，已跳过`)
+    if (result.renamed.length > 0)
+      extra.push(`${result.renamed.length} 个文件因原位置被占用，已加 (1) 后缀恢复`)
+    if (result.keptFolders.length > 0)
+      extra.push('为安全起见，整理时创建的分类文件夹已保留，如不需要可手动删除')
+    setAnalyzeStatus({
+      ok: true,
+      message: `恢复完成：已连带撤销 ${result.restoredRecords} 次整理，移回 ${result.restored} 个文件${
+        extra.length > 0 ? '；' + extra.join('；') : ''
+      }`,
+    })
+    refreshUndoable()
+  }
+
   return (
     <div className="min-h-screen bg-gray-100 p-8">
       <div className="mx-auto max-w-4xl">
@@ -71,6 +153,31 @@ export default function App() {
         <header className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-800">📂 holy_sexy_folder_management</h1>
           <div className="flex gap-3">
+            {/* 撤销按钮：只在有可撤销记录时显示，悬停可见上次整理的文件夹和时间 */}
+            {undoable?.undoable && (
+              <button
+                onClick={handleUndo}
+                disabled={undoing}
+                title={`上次整理：${undoable.info.folderPath}（${new Date(
+                  undoable.info.createdAt,
+                ).toLocaleString()}，${undoable.info.moveCount} 个文件）`}
+                className="rounded-lg border border-amber-300 bg-amber-50 px-5 py-2.5 font-medium text-amber-700 shadow-sm transition hover:bg-amber-100 disabled:opacity-50"
+              >
+                {undoing
+                  ? undoProgress
+                    ? `撤销中 ${undoProgress.current}/${undoProgress.total}`
+                    : '撤销中…'
+                  : '↩️ 撤销上次整理'}
+              </button>
+            )}
+            {/* 整理历史按钮：始终显示（历史全是已撤销记录时仍可查看） */}
+            <button
+              onClick={() => setShowHistory(true)}
+              title="查看整理历史并恢复"
+              className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 font-medium text-gray-700 shadow-sm transition hover:bg-gray-50"
+            >
+              📜 整理历史
+            </button>
             {/* 分析按钮：选了文件夹且列表非空才可点 */}
             <button
               onClick={handleAnalyze}
@@ -130,7 +237,13 @@ export default function App() {
             </p>
             {/* 有整理方案时显示预览界面，否则显示原始文件列表 */}
             {plans ? (
-              <PlanPreview plans={plans} files={files} onCancel={() => setPlans(null)} />
+              <PlanPreview
+                plans={plans}
+                files={files}
+                folderPath={folderPath}
+                onCancel={() => setPlans(null)}
+                onOrganized={handleOrganized}
+              />
             ) : (
               <FileTable files={files} />
             )}
@@ -142,6 +255,11 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {/* 整理历史弹窗 */}
+      {showHistory && (
+        <HistoryModal onClose={() => setShowHistory(false)} onRestored={handleRestored} />
+      )}
 
       {/* API Key 设置弹窗 */}
       {showSettings && (

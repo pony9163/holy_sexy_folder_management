@@ -3,8 +3,8 @@
 // - 每个方案用卡片树展示：每个新文件夹一张卡片，列出将移入的文件和 AI 给的 reason
 // - 每个文件可"排除/恢复"，排除状态按方案独立保存
 // - 已有子文件夹不参与整理，单独显示为底部灰色提示行
-// - "确认整理"此阶段不做实际移动，只弹窗显示将移动的文件数
-import { useMemo, useState } from 'react'
+// - "确认整理"：弹窗确认 → 调主进程真正移动文件（显示进度）→ 显示"已整理 XX 个文件"
+import { useEffect, useMemo, useState } from 'react'
 import { formatSize } from '../utils/format'
 
 // 单个方案卡片：一个新文件夹 + 其下将移入的文件列表
@@ -53,11 +53,17 @@ function FolderCard({ folder, fileMap, excludedSet, onToggle }) {
   )
 }
 
-export default function PlanPreview({ plans, files, onCancel }) {
+export default function PlanPreview({ plans, files, folderPath, onCancel, onOrganized }) {
   const [activeIndex, setActiveIndex] = useState(0) // 当前选中的方案 Tab
   // 每个方案各自的排除集合（下标与 plans 对齐）：Set<文件名>
   const [excluded, setExcluded] = useState(() => plans.map(() => new Set()))
-  const [showConfirm, setShowConfirm] = useState(false) // 是否显示"确认整理"弹窗
+  // 整理弹窗的阶段：null（关闭）→ confirm（待确认）→ running（移动中）→ done（完成）
+  const [phase, setPhase] = useState(null)
+  const [moveProgress, setMoveProgress] = useState(null) // { current, total }
+  const [result, setResult] = useState(null) // organize:run 的返回值
+
+  // 订阅移动进度（主进程每移动一个文件推送一次），卸载时取消订阅
+  useEffect(() => window.api.organize.onProgress(setMoveProgress), [])
 
   // 文件名 → 文件对象索引，用于校验 AI 返回的文件名并取 size/isDirectory
   const fileMap = useMemo(() => new Map(files.map((f) => [f.name, f])), [files])
@@ -104,6 +110,22 @@ export default function PlanPreview({ plans, files, onCancel }) {
         return next
       }),
     )
+  }
+
+  // 点击弹窗里的"开始整理"：把当前方案（去掉被排除的文件）发给主进程执行移动
+  async function handleOrganize() {
+    setPhase('running')
+    setMoveProgress(null)
+    // 分组数据直接来自预览界面的计算结果：只含有效文件名，再过滤排除项
+    const groups = resolvedFolders
+      .map((folder) => ({
+        folderName: folder.name,
+        fileNames: folder.validNames.filter((name) => !excluded[activeIndex].has(name)),
+      }))
+      .filter((group) => group.fileNames.length > 0)
+    const res = await window.api.organize.run({ folderPath, groups })
+    setResult(res)
+    setPhase('done')
   }
 
   return (
@@ -154,7 +176,7 @@ export default function PlanPreview({ plans, files, onCancel }) {
           取消
         </button>
         <button
-          onClick={() => setShowConfirm(true)}
+          onClick={() => setPhase('confirm')}
           disabled={moveCount === 0}
           title={moveCount === 0 ? '没有可整理的文件' : undefined}
           className="rounded-lg bg-emerald-600 px-5 py-2.5 font-medium text-white shadow transition hover:bg-emerald-700 disabled:opacity-50"
@@ -163,25 +185,97 @@ export default function PlanPreview({ plans, files, onCancel }) {
         </button>
       </div>
 
-      {/* 确认弹窗：此阶段不做实际移动，只显示将移动的文件数 */}
-      {showConfirm && (
+      {/* 整理弹窗：confirm（待确认）→ running（移动中，遮罩不可关）→ done（结果） */}
+      {phase && (
         <div
-          onClick={() => setShowConfirm(false)}
+          onClick={() => phase === 'confirm' && setPhase(null)}
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
         >
           <div
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl"
           >
-            <p className="text-gray-800">将移动 {moveCount} 个文件</p>
-            <div className="mt-5 flex justify-end">
-              <button
-                onClick={() => setShowConfirm(false)}
-                className="rounded-lg bg-blue-600 px-5 py-2.5 font-medium text-white shadow transition hover:bg-blue-700"
-              >
-                知道了
-              </button>
-            </div>
+            {phase === 'confirm' && (
+              <>
+                <p className="text-gray-800">
+                  将在 <span className="font-medium">{folderPath}</span> 内创建分类文件夹并移动{' '}
+                  {moveCount} 个文件
+                </p>
+                <p className="mt-2 text-sm text-gray-500">
+                  移动前会保存完整的位置记录，整理后可一键撤销
+                </p>
+                <div className="mt-5 flex justify-end gap-3">
+                  <button
+                    onClick={() => setPhase(null)}
+                    className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-gray-700 shadow-sm transition hover:bg-gray-50"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleOrganize}
+                    className="rounded-lg bg-emerald-600 px-5 py-2.5 font-medium text-white shadow transition hover:bg-emerald-700"
+                  >
+                    开始整理
+                  </button>
+                </div>
+              </>
+            )}
+
+            {phase === 'running' && (
+              <>
+                <p className="text-gray-800">
+                  正在移动文件…
+                  {moveProgress ? ` ${moveProgress.current}/${moveProgress.total}` : ''}
+                </p>
+                {/* 进度条：按已移动数量填充 */}
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-gray-200">
+                  <div
+                    className="h-full rounded-full bg-emerald-500 transition-all"
+                    style={{
+                      width: moveProgress
+                        ? `${Math.round((moveProgress.current / moveProgress.total) * 100)}%`
+                        : '0%',
+                    }}
+                  />
+                </div>
+              </>
+            )}
+
+            {phase === 'done' && result && (
+              <>
+                {result.ok ? (
+                  <>
+                    <p className="text-gray-800">✅ 已整理 {result.moved} 个文件</p>
+                    {/* 部分文件失败时列出原因 */}
+                    {result.errors.length > 0 && (
+                      <div className="mt-3 max-h-40 overflow-y-auto rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                        <p className="mb-1">以下 {result.errors.length} 个文件未能移动：</p>
+                        <ul className="space-y-0.5">
+                          {result.errors.map((e) => (
+                            <li key={e.name}>
+                              {e.name} —— {e.error}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-red-700">整理失败：{result.error}</p>
+                )}
+                <div className="mt-5 flex justify-end">
+                  <button
+                    onClick={() => {
+                      setPhase(null)
+                      if (result.ok) onOrganized(result)
+                    }}
+                    className="rounded-lg bg-blue-600 px-5 py-2.5 font-medium text-white shadow transition hover:bg-blue-700"
+                  >
+                    完成
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
