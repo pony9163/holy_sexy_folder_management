@@ -81,12 +81,12 @@ export default function ApiKeyModal({ onClose, onStatusChange }) {
   return (
     /* 半透明遮罩，点击遮罩关闭 */
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       {/* 弹窗主体，阻止冒泡避免误关 */}
       <div
-        className="w-full max-w-md animate-pop-in rounded-xl border border-line bg-surface p-6 shadow-xl"
+        className="w-full max-w-md animate-pop-in rounded-2xl border border-line bg-surface p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="mb-4 inline-flex items-center gap-2 text-lg font-bold text-ink">
@@ -155,7 +155,7 @@ export default function ApiKeyModal({ onClose, onStatusChange }) {
           <button
             onClick={handleSave}
             disabled={busy || !input.trim()}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-hi active:scale-[0.98] disabled:opacity-50 dark:text-indigo-950"
+            className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-hi active:scale-[0.98] disabled:opacity-50"
           >
             保存
           </button>

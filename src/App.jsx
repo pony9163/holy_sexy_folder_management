@@ -50,6 +50,23 @@ function extOf(name) {
 // 参与分析的文件数超过该值时先弹确认框（输出 JSON 过长可能变慢或截断）
 const LARGE_FILE_THRESHOLD = 300
 
+// iOS 风格拨动开关：纯样式封装，语义仍是 checkbox（约束栏使用）
+function Switch({ checked, disabled, onChange }) {
+  return (
+    <span className="relative inline-flex h-5 w-9 shrink-0">
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={onChange}
+        className="peer absolute inset-0 cursor-pointer appearance-none rounded-full bg-ink-3/35 transition-colors duration-200 checked:bg-accent disabled:cursor-not-allowed"
+      />
+      {/* 圆钮：checked 时右移；pointer-events 穿透给下面的 checkbox */}
+      <span className="pointer-events-none absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 peer-checked:translate-x-4" />
+    </span>
+  )
+}
+
 export default function App() {
   const [folderPath, setFolderPath] = useState(null) // 当前选中的文件夹路径
   const [files, setFiles] = useState([])             // 第一层文件/文件夹列表
@@ -279,17 +296,17 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-canvas p-8 text-ink transition-colors">
-      <div className="mx-auto max-w-4xl">
-        {/* 标题栏与操作按钮 */}
-        <header className="mb-6 flex items-center justify-between gap-4">
+    <div className="min-h-screen bg-canvas text-ink transition-colors">
+      {/* 毛玻璃顶栏：sticky 通栏，内容滚动时从玻璃下穿过（macOS 质感的关键） */}
+      <header className="sticky top-0 z-40 border-b border-line bg-canvas/70 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-8 py-3">
           {/* min-w-0 + truncate：空间不足时标题截断，绝不挤压右侧按钮 */}
-          <h1 className="flex min-w-0 items-center gap-2.5 text-xl font-bold text-ink">
-            <FolderOpen size={24} className="shrink-0 text-accent" />
+          <h1 className="flex min-w-0 items-center gap-2.5 text-lg font-semibold text-ink">
+            <FolderOpen size={22} className="shrink-0 text-accent" />
             <span className="truncate">holy_sexy_folder_management</span>
           </h1>
           {/* 按钮全部 nowrap：宁可标题截断，也不能让按钮文字竖排 */}
-          <div className="flex shrink-0 gap-2.5 whitespace-nowrap">
+          <div className="flex shrink-0 gap-2 whitespace-nowrap">
             {/* 撤销按钮：只在有可撤销记录时显示，悬停可见上次整理的文件夹和时间 */}
             {undoable?.undoable && (
               <button
@@ -298,9 +315,9 @@ export default function App() {
                 title={`上次整理：${undoable.info.folderPath}（${new Date(
                   undoable.info.createdAt,
                 ).toLocaleString()}，${undoable.info.moveCount} 个文件）`}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 font-medium text-amber-700 shadow-sm transition hover:bg-amber-100 active:scale-[0.98] disabled:opacity-50 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300 dark:hover:bg-amber-400/20"
+                className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100 active:scale-[0.98] disabled:opacity-50 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300 dark:hover:bg-amber-400/20"
               >
-                <Undo2 size={16} />
+                <Undo2 size={15} />
                 {undoing
                   ? undoProgress
                     ? `撤销中 ${undoProgress.current}/${undoProgress.total}`
@@ -312,9 +329,9 @@ export default function App() {
             <button
               onClick={() => setShowHistory(true)}
               title="查看整理历史并恢复"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-4 py-2.5 font-medium text-ink-2 shadow-sm transition hover:bg-sunken active:scale-[0.98]"
+              className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-4 py-2 text-sm font-medium text-ink-2 transition hover:bg-sunken active:scale-[0.98]"
             >
-              <History size={16} />
+              <History size={15} />
               整理历史
             </button>
             {/* 分析按钮：选了文件夹且约束过滤后仍有条目才可点 */}
@@ -326,9 +343,9 @@ export default function App() {
                   ? '所有条目都被约束开关跳过，没有可分析的文件'
                   : undefined
               }
-              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2.5 font-medium text-white shadow transition hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-50 dark:bg-emerald-500 dark:hover:bg-emerald-400 dark:text-emerald-950"
+              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 active:scale-[0.98] disabled:opacity-50"
             >
-              {analyzing ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+              {analyzing ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
               {analyzing
                 ? progress > 0
                   ? `分析中…已接收 ${progress} 字`
@@ -338,59 +355,59 @@ export default function App() {
             <button
               onClick={handleSelectFolder}
               disabled={loading}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2.5 font-medium text-white shadow transition hover:bg-accent-hi active:scale-[0.98] disabled:opacity-50 dark:text-indigo-950"
+              className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-hi active:scale-[0.98] disabled:opacity-50"
             >
-              <FolderSearch size={16} />
+              <FolderSearch size={15} />
               {loading ? '读取中…' : '选择文件夹'}
             </button>
             {/* 设置按钮：打开 API Key 设置弹窗 */}
             <button
               onClick={() => setShowSettings(true)}
               title="API Key 设置"
-              className="inline-flex items-center rounded-lg border border-line bg-surface px-3 py-2.5 text-ink-2 shadow-sm transition hover:bg-sunken active:scale-[0.98]"
+              className="inline-flex items-center rounded-full border border-line bg-surface px-3 py-2 text-ink-2 transition hover:bg-sunken active:scale-[0.98]"
             >
-              <Settings size={18} />
+              <Settings size={16} />
             </button>
             {/* 主题切换：暗/亮 */}
             <button
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               title={theme === 'dark' ? '切换到亮色主题' : '切换到暗色主题'}
-              className="inline-flex items-center rounded-lg border border-line bg-surface px-3 py-2.5 text-ink-2 shadow-sm transition hover:bg-sunken active:scale-[0.98]"
+              className="inline-flex items-center rounded-full border border-line bg-surface px-3 py-2 text-ink-2 transition hover:bg-sunken active:scale-[0.98]"
             >
-              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
             </button>
           </div>
-        </header>
+        </div>
+      </header>
 
+      {/* 主内容区 */}
+      <div className="mx-auto max-w-4xl px-8 py-6">
         {/* 约束开关栏：分析前声明哪些条目不参与整理（分析中/预览打开时锁定） */}
         {folderPath && (
           <div
             title={constraintsLocked ? '分析中或预览打开时不可修改，返回文件列表后再调整' : undefined}
-            className={`mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-line bg-surface px-4 py-2.5 text-sm text-ink-2 shadow-sm transition ${
+            className={`mb-4 flex flex-wrap items-center gap-x-6 gap-y-2.5 rounded-2xl border border-line bg-surface px-4 py-3 text-sm text-ink-2 transition ${
               constraintsLocked ? 'opacity-60' : ''
             }`}
           >
-            <label className="flex cursor-pointer items-center gap-1.5">
-              <input
-                type="checkbox"
+            <label className="flex cursor-pointer items-center gap-2">
+              <Switch
                 checked={constraints.skipDirs}
                 disabled={constraintsLocked}
                 onChange={(e) => setConstraints((c) => ({ ...c, skipDirs: e.target.checked }))}
               />
               不整理已有文件夹
             </label>
-            <label className="flex cursor-pointer items-center gap-1.5">
-              <input
-                type="checkbox"
+            <label className="flex cursor-pointer items-center gap-2">
+              <Switch
                 checked={constraints.skipRecent}
                 disabled={constraintsLocked}
                 onChange={(e) => setConstraints((c) => ({ ...c, skipRecent: e.target.checked }))}
               />
               不动最近 7 天修改的文件
             </label>
-            <label className="flex cursor-pointer items-center gap-1.5">
-              <input
-                type="checkbox"
+            <label className="flex cursor-pointer items-center gap-2">
+              <Switch
                 checked={constraints.excludeExtsEnabled}
                 disabled={constraintsLocked}
                 onChange={(e) =>
@@ -404,7 +421,7 @@ export default function App() {
                 disabled={constraintsLocked || !constraints.excludeExtsEnabled}
                 onChange={(e) => setConstraints((c) => ({ ...c, excludeExts: e.target.value }))}
                 placeholder="如 exe,dmg"
-                className="w-28 rounded border border-line bg-surface px-2 py-1 text-xs text-ink outline-none transition focus:border-accent disabled:bg-sunken"
+                className="w-28 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs text-ink outline-none transition focus:border-accent disabled:bg-sunken"
               />
             </label>
             {/* 实时统计被跳过的条目数 */}
@@ -416,7 +433,7 @@ export default function App() {
 
         {/* 未配置密钥时的引导提示 */}
         {keyStatus && !keyStatus.configured && (
-          <p className="mb-4 animate-fade-in rounded-lg bg-amber-50 px-4 py-2.5 text-sm text-amber-700 dark:bg-amber-400/10 dark:text-amber-300">
+          <p className="mb-4 animate-fade-in rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-700 dark:bg-amber-400/10 dark:text-amber-300">
             尚未设置 API Key，「分析」功能需要先在
             <button onClick={() => setShowSettings(true)} className="mx-1 underline">
               设置
@@ -428,7 +445,7 @@ export default function App() {
         {/* 分析结果提示条：成功为绿色，失败为红色；撤销后留有空分类文件夹时附清理按钮 */}
         {analyzeStatus && (
           <p
-            className={`mb-4 animate-fade-in rounded-lg px-4 py-2.5 text-sm ${
+            className={`mb-4 animate-fade-in rounded-xl px-4 py-2.5 text-sm ${
               analyzeStatus.ok
                 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300'
                 : 'bg-red-50 text-red-700 dark:bg-red-400/10 dark:text-red-300'
@@ -484,11 +501,11 @@ export default function App() {
       {confirmLarge && (
         <div
           onClick={() => setConfirmLarge(false)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm animate-pop-in rounded-xl border border-line bg-surface p-6 shadow-xl"
+            className="w-full max-w-sm animate-pop-in rounded-2xl border border-line bg-surface p-6 shadow-xl"
           >
             <p className="text-ink">
               文件较多（{eligibleFiles.length} 个），AI
@@ -497,7 +514,7 @@ export default function App() {
             <div className="mt-5 flex justify-end gap-3">
               <button
                 onClick={() => setConfirmLarge(false)}
-                className="rounded-lg border border-line bg-surface px-5 py-2.5 text-ink-2 shadow-sm transition hover:bg-sunken active:scale-[0.98]"
+                className="rounded-full border border-line bg-surface px-5 py-2 text-sm text-ink-2 transition hover:bg-sunken active:scale-[0.98]"
               >
                 取消
               </button>
@@ -506,7 +523,7 @@ export default function App() {
                   setConfirmLarge(false)
                   doAnalyze()
                 }}
-                className="rounded-lg bg-emerald-600 px-5 py-2.5 font-medium text-white shadow transition hover:bg-emerald-700 active:scale-[0.98] dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400"
+                className="rounded-full bg-emerald-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 active:scale-[0.98]"
               >
                 仍要继续
               </button>

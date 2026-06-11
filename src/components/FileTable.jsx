@@ -10,9 +10,10 @@ export default function FileTable({ files }) {
   })
 
   return (
-    <div className="animate-fade-in overflow-hidden rounded-xl border border-line shadow-sm">
+    <div className="animate-fade-in overflow-hidden rounded-2xl border border-line">
       <table className="w-full text-left text-sm">
-        <thead className="bg-sunken text-ink-2">
+        {/* 表头与表体同色 + 发丝分隔线：macOS Finder 列表感 */}
+        <thead className="border-b border-line bg-surface text-ink-3">
           <tr>
             <th className="px-4 py-3 font-medium">名称</th>
             <th className="px-4 py-3 font-medium">类型</th>

@@ -64,11 +64,11 @@ export default function HistoryModal({ onClose, onRestored }) {
   return (
     <div
       onClick={() => phase === null && onClose()}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg animate-pop-in rounded-xl border border-line bg-surface p-6 shadow-xl"
+        className="w-full max-w-lg animate-pop-in rounded-2xl border border-line bg-surface p-6 shadow-xl"
       >
         {/* ===== 列表阶段 ===== */}
         {phase === null && (
@@ -130,7 +130,7 @@ export default function HistoryModal({ onClose, onRestored }) {
                         onClick={() => askRestore(item)}
                         disabled={!restorable}
                         title={restorable ? '恢复到这次整理之前' : '该时间点之后的整理都已撤销'}
-                        className="shrink-0 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-amber-700 transition hover:bg-amber-100 active:scale-[0.98] disabled:opacity-40 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300 dark:hover:bg-amber-400/20"
+                        className="shrink-0 rounded-full border border-amber-300 bg-amber-50 px-3.5 py-1.5 text-sm text-amber-700 transition hover:bg-amber-100 active:scale-[0.98] disabled:opacity-40 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300 dark:hover:bg-amber-400/20"
                       >
                         恢复
                       </button>
@@ -175,13 +175,13 @@ export default function HistoryModal({ onClose, onRestored }) {
                   setPhase(null)
                   setPending(null)
                 }}
-                className="rounded-lg border border-line bg-surface px-5 py-2.5 text-ink-2 shadow-sm transition hover:bg-sunken active:scale-[0.98]"
+                className="rounded-full border border-line bg-surface px-5 py-2 text-sm text-ink-2 transition hover:bg-sunken active:scale-[0.98]"
               >
                 取消
               </button>
               <button
                 onClick={handleRestore}
-                className="rounded-lg bg-amber-600 px-5 py-2.5 font-medium text-white shadow transition hover:bg-amber-700 active:scale-[0.98] dark:bg-amber-500 dark:text-amber-950 dark:hover:bg-amber-400"
+                className="rounded-full bg-amber-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-amber-500 active:scale-[0.98]"
               >
                 开始恢复{pending.chain.length > 1 ? `（连带撤销 ${pending.chain.length} 次）` : ''}
               </button>
@@ -242,7 +242,7 @@ export default function HistoryModal({ onClose, onRestored }) {
             <div className="mt-5 flex justify-end">
               <button
                 onClick={finishRestore}
-                className="rounded-lg bg-accent px-5 py-2.5 font-medium text-white shadow transition hover:bg-accent-hi active:scale-[0.98] dark:text-indigo-950"
+                className="rounded-full bg-accent px-5 py-2 text-sm font-medium text-white transition hover:bg-accent-hi active:scale-[0.98]"
               >
                 完成
               </button>

@@ -103,6 +103,7 @@ src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（elec
 
 - Tailwind v4 走 `@tailwindcss/vite` 插件：**没有也不需要** `tailwind.config.js`/PostCSS 配置，主题系统全在 `src/index.css`
 - **双主题机制**：`index.css` 用 `@custom-variant dark` 把暗色绑定到 html 的 `.dark` 类（App.jsx 的 theme state 切换 + localStorage `ui-theme` 持久化，默认 dark）；语义令牌（`--canvas/--surface/--sunken/--line/--ink/--ink-2/--ink-3/--accent`）经 `@theme inline` 注册成 Tailwind 颜色。**改样式用令牌类**（`bg-surface`、`text-ink-2`、`border-line` 等，一个类两主题通吃），不要写死 gray-xxx；状态色（emerald/amber/red）保留原色相并加 `dark:` 半透明变体。图标用 lucide-react（行内 15-16、按钮 16-18），不要混回 emoji；顶栏按钮必须 `whitespace-nowrap`（中文被挤压会逐字竖排）
+- **视觉气质是 Apple/macOS 系**，新 UI 要保持：accent 是苹果蓝（亮 #0071e3 / 暗 #0a84ff，蓝底始终白字）、边框是发丝级半透明、字体栈 -apple-system + 苹方在 index.css；顶栏是 sticky 毛玻璃（`bg-canvas/70 backdrop-blur-xl`）；主操作按钮胶囊（rounded-full）、卡片/弹窗 rounded-2xl、弹窗遮罩带 `backdrop-blur-sm`；约束栏用 App.jsx 内的 `Switch` 组件（iOS 拨动开关），方案 Tab 是 segmented control（凹槽 bg-sunken p-1 + 选中段 bg-surface 浮起）
 - `vite.config.js` 的 `base: './'` 是生产模式 `file://` 加载 dist 所必需的，别删
 - 文件列表排序规则在 `FileTable.jsx`：文件夹在前，组内 `localeCompare(name, 'zh')`；文件夹的大小列显示 `—`
 - 约束开关栏在 `App.jsx`：三个开关（不整理已有文件夹默认开/不动最近 7 天/排除扩展名），状态持久化到 localStorage（`organize-constraints-v1`）；App 用 useMemo 把 files 分成 `eligibleFiles`（发给 AI、传给 PlanPreview）和 `skippedEntries`（预览灰色区展示）；分析中或预览打开时整栏锁定，防止方案与约束不一致；PlanPreview 的 `resolvedFolders` 只认 fileMap 成员（不再特判 isDirectory，目录参与与否由 App 过滤决定）

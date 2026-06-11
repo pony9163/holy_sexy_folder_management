@@ -18,42 +18,47 @@
   --color-accent-hi: var(--accent-hi); /* 主操作色 hover */
 }
 
-/* 亮色主题（默认变量） */
+/* 亮色主题（默认变量）：Apple 系配色——苹果蓝 accent、发丝级半透明边框 */
 :root {
-  --canvas: #f4f5f7;
+  --canvas: #f5f5f7;
   --surface: #ffffff;
-  --sunken: #f0f1f3;
-  --line: #e4e6ea;
-  --ink: #1f2328;
-  --ink-2: #57606a;
-  --ink-3: #9aa3ad;
-  --accent: #4f46e5;
-  --accent-hi: #4338ca;
+  --sunken: #f0f0f2;
+  --line: rgba(0, 0, 0, 0.08);
+  --ink: #1d1d1f;
+  --ink-2: #515154;
+  --ink-3: #86868b;
+  --accent: #0071e3;
+  --accent-hi: #0077ed;
 }
 
-/* 暗色主题：与应用图标（深灰底银色粒子环）同气质 */
+/* 暗色主题：macOS 暗色系统色（图标的深灰底银色粒子环同气质） */
 .dark {
-  --canvas: #17181c;
-  --surface: #1f2127;
-  --sunken: #26282f;
-  --line: #34363e;
-  --ink: #e8eaed;
-  --ink-2: #a8adb6;
-  --ink-3: #6b7079;
-  --accent: #818cf8;
-  --accent-hi: #a5b4fc;
+  --canvas: #161617;
+  --surface: #1d1d1f;
+  --sunken: #2c2c2e;
+  --line: rgba(255, 255, 255, 0.1);
+  --ink: #f5f5f7;
+  --ink-2: #a1a1a6;
+  --ink-3: #6e6e73;
+  --accent: #0a84ff;
+  --accent-hi: #409cff;
 }
 
-/* 背景色随主题切换时平滑过渡 */
+/* 背景色随主题切换时平滑过渡；字体走 Apple 系统栈（无 SF 的平台回退苹方/鸿蒙黑/雅黑） */
 html {
   background: var(--canvas);
 }
 body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'HarmonyOS Sans SC',
+    'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
   transition: background-color 0.2s ease;
 }
 
 /* ===== 微动效 =====
-   fade-in：提示条/卡片淡入上移；pop-in：弹窗轻微放大入场。都很克制（≤0.2s） */
+   fade-in：提示条/卡片淡入上移；pop-in：弹窗轻微放大入场。
+   曲线用 Apple 惯用的标准 ease，克制（≤0.2s） */
 @keyframes fade-in {
   from {
     opacity: 0;
@@ -67,7 +72,7 @@ body {
 @keyframes pop-in {
   from {
     opacity: 0;
-    transform: scale(0.96);
+    transform: scale(0.97);
   }
   to {
     opacity: 1;
@@ -75,8 +80,8 @@ body {
   }
 }
 @utility animate-fade-in {
-  animation: fade-in 0.2s ease-out both;
+  animation: fade-in 0.2s cubic-bezier(0.25, 0.1, 0.25, 1) both;
 }
 @utility animate-pop-in {
-  animation: pop-in 0.15s ease-out both;
+  animation: pop-in 0.18s cubic-bezier(0.25, 0.1, 0.25, 1) both;
 }
