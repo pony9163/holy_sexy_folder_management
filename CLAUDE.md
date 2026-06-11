@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概况
 
-holy_sexy_folder_management——Electron + React 18 + Tailwind CSS v4 桌面应用：选择文件夹后列出其**第一层**条目（设计上不递归），调用 Kimi API（Moonshot）生成文件分类方案，确认后真正移动文件（`fs.rename`），并支持撤销和按历史快照顺序回滚。项目就在仓库根目录，所有命令都在根目录执行。代码注释统一用中文，新代码保持此约定。
+holy_sexy_folder_management——Electron + React 18 + Tailwind CSS v4 桌面应用：选择文件夹后列出其**第一层**条目（设计上不递归），调用 DeepSeek API 生成文件分类方案，确认后真正移动文件（`fs.rename`），并支持撤销和按历史快照顺序回滚。项目就在仓库根目录，所有命令都在根目录执行。代码注释统一用中文，新代码保持此约定。
 
 ## 常用命令
 
@@ -80,18 +80,18 @@ src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（elec
 - 完整密钥**只单向**从渲染进程传入主进程（save/test 时）；任何返回值/状态只含末 4 位掩码（`keyStore.getStatus()`）
 - 落盘必须经 `safeStorage` 加密（文件 `userData/api-key.enc`，权限 0600）；`isEncryptionAvailable()` 为 false 时只存内存、绝不落明文
 - 任何 console.log / 错误消息不得包含密钥
-- 密钥优先级：keyStore 内的用户密钥 > 环境变量 `MOONSHOT_API_KEY`（开发备选）；格式校验为 `sk-` 前缀（Moonshot 密钥格式）
+- 密钥优先级：keyStore 内的用户密钥 > 环境变量 `DEEPSEEK_API_KEY`（开发备选）；格式校验为 `sk-` 前缀（DeepSeek 密钥格式）
 
-### Kimi API（electron/ai.js）
+### DeepSeek API（electron/ai.js）
 
-- 用 `openai` SDK 走 Moonshot 的 OpenAI 兼容接口（baseURL `https://api.moonshot.cn/v1`）；client 实例经 `getClient()` 缓存复用（keep-alive 连接池省握手、降首响应延迟，换密钥自动重建），**不要改回每次 new OpenAI**
-- 模型是 `moonshot-v1-auto`，`temperature: 0.3`；系统提示词作为 `messages` 第一条（`role: 'system'`）。**不要换回 kimi-k2.6 / k2.5**：它们是思考型模型，同样任务 ≈30s（v1-auto ≈4s），且 k2.6 只接受 temperature=1
+- 用 `openai` SDK 走 DeepSeek 的 OpenAI 兼容接口（baseURL `https://api.deepseek.com`）；client 实例经 `getClient()` 缓存复用（keep-alive 连接池省握手、降首响应延迟，换密钥自动重建），**不要改回每次 new OpenAI**
+- 模型是 `deepseek-v4-flash`（官方主 ID；`deepseek-chat`/`deepseek-reasoner` 是兼容别名，2026-07-24 弃用，别用），`temperature: 0.3`；系统提示词作为 `messages` 第一条（`role: 'system'`）。**该模型思考模式默认开启**，`streamCompletion` 里显式传 `thinking: { type: 'disabled' }` 关闭（openai SDK 透传未知参数）——2026-06 实测关闭后首字 token 秒级、整体快于之前的 moonshot-v1-auto；删掉这行会慢到思考型模型的 ≈30s 量级（生成用不到的推理过程），与之前弃用 kimi 思考型模型是同一个教训
 - 调用是流式的（`stream: true`，共用 `streamCompletion`）：`analyzeFiles(files, onProgress)` 边接收边回调字符数，main.js 经 `analyze-progress` 事件推给渲染进程显示进度
 - 分析的系统提示词要求一次返回恰好三套思路不同的方案，严格 JSON（`{ plans: [{ name, folders: [{ name, files, reason }] }] }`）；`parsePlans` 剥掉模型偶尔包的 ```json 栅栏再 parse，校验 plans/folders 结构，方案名缺失或重复时回退「方案一/二/三」（前端 Tab 的 key 是方案名，必须唯一）
 - **每套方案必须独立覆盖全部文件**（三套是三选一的备选项，不是把文件分摊到三套里）：提示词已强调，但模型偶尔仍漏个别文件，`fillMissingFiles` 在分析后把每套未覆盖的文件归入「其他」兜底分类。对话调整**故意不做**这个兜底——用户可能就是要求把某些文件从方案里去掉
 - `adjustPlan({ files, plan, history }, onProgress)`：按用户自然语言要求改写一套方案，返回 `{ reply, folders, raw }`；history 里 assistant 消息发上一轮的 `raw` 原始 JSON（让模型看到自己的输出），进度走独立的 `adjust-progress`
 - `testApiKey` 用 `client.models.list()` 验证密钥——零 token 成本，改动时别换成会计费的接口（它测新 key，不走 getClient 缓存）
-- SDK 错误统一经 `translateError` 翻译成中文（按类型化异常 `instanceof` 分发）。**Moonshot 的 429 有三种含义**，按上游消息关键词区分后再报：engine overloaded（服务端过载，非用户问题）/ quota、balance、frozen（配额余额）/ 其余才是真频率超限——别简化回笼统的"请求过于频繁"
+- SDK 错误统一经 `translateError` 翻译成中文（按类型化异常 `instanceof` 分发）。**DeepSeek 的错误语义按状态码区分**（与之前 Moonshot 把多种含义塞进 429 不同）：429 只表示请求过快/动态并发限流；余额不足是 **402**、服务端过载是 **503**——这两个没有专属 SDK 异常类，在 `APIError` 分支里按 `err.status` 判断，别把它们并回笼统的通用报错
 - 文件数量保护的阈值 **300 在两处**：前端 `App.jsx` 的 `LARGE_FILE_THRESHOLD`（超过先弹确认框）和 `ai.js` 解析失败时的提示判断（CJS/ESM 双模块体系无法共享常量），改阈值要两处同步
 
 ### 主进程窗口行为（electron/main.js）

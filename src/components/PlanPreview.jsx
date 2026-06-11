@@ -310,7 +310,7 @@ export default function PlanPreview({
                 <Loader2 size={14} className="animate-spin" />
                 {adjustProgress > 0
                   ? `调整中…已接收 ${adjustProgress} 字`
-                  : `等待 Kimi 响应…${adjustSeconds}s`}
+                  : `等待 DeepSeek 响应…${adjustSeconds}s`}
               </p>
             </div>
           )}

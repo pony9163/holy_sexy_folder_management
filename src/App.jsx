@@ -1,8 +1,8 @@
 // 应用主界面：
 // - 顶部：标题 + "分析" / "选择文件夹" / ⚙️ 设置按钮
 // - 选中文件夹后：显示当前路径、条目数和文件列表表格
-// - 点「分析」：把文件清单发给 Kimi 生成分类方案，结果以预览卡片展示（可排除文件后确认）
-// - ⚙️ 设置：填写/管理 Moonshot API Key（加密存储在主进程侧）
+// - 点「分析」：把文件清单发给 DeepSeek 生成分类方案，结果以预览卡片展示（可排除文件后确认）
+// - ⚙️ 设置：填写/管理 DeepSeek API Key（加密存储在主进程侧）
 import { useEffect, useMemo, useState } from 'react'
 import {
   FolderOpen,
@@ -71,7 +71,7 @@ export default function App() {
   const [folderPath, setFolderPath] = useState(null) // 当前选中的文件夹路径
   const [files, setFiles] = useState([])             // 第一层文件/文件夹列表
   const [loading, setLoading] = useState(false)      // 是否正在读取文件夹
-  const [analyzing, setAnalyzing] = useState(false)  // 是否正在调用 Kimi 分析
+  const [analyzing, setAnalyzing] = useState(false)  // 是否正在调用 DeepSeek 分析
   const [progress, setProgress] = useState(0)        // 流式输出已接收的字符数（仅分析中有意义）
   const [analyzeSeconds, setAnalyzeSeconds] = useState(0) // 分析已等待秒数（首响应前的反馈）
   const [analyzeStatus, setAnalyzeStatus] = useState(null) // 分析结果提示 { ok, message }
@@ -135,7 +135,7 @@ export default function App() {
     window.api.apiKey.getStatus().then(setKeyStatus)
   }, [])
 
-  // 订阅分析进度事件（主进程流式接收 Kimi 回复时持续推送），卸载时取消订阅
+  // 订阅分析进度事件（主进程流式接收 DeepSeek 回复时持续推送），卸载时取消订阅
   useEffect(() => window.api.onAnalyzeProgress(setProgress), [])
 
   // 分析期间每秒计时：首响应到达前（progress 为 0）按钮显示已等待秒数，让用户知道没卡死
@@ -185,7 +185,7 @@ export default function App() {
     }
   }
 
-  // 真正执行分析：把文件清单发给主进程 → Kimi API → 返回分类方案
+  // 真正执行分析：把文件清单发给主进程 → DeepSeek API → 返回分类方案
   async function doAnalyze() {
     setAnalyzing(true)
     setAnalyzeStatus(null)
@@ -349,7 +349,7 @@ export default function App() {
               {analyzing
                 ? progress > 0
                   ? `分析中…已接收 ${progress} 字`
-                  : `等待 Kimi 响应…${analyzeSeconds}s`
+                  : `等待 DeepSeek 响应…${analyzeSeconds}s`
                 : '分析'}
             </button>
             <button
@@ -438,7 +438,7 @@ export default function App() {
             <button onClick={() => setShowSettings(true)} className="mx-1 underline">
               设置
             </button>
-            中填写你的 Moonshot API Key
+            中填写你的 DeepSeek API Key
           </p>
         )}
 

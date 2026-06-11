@@ -187,7 +187,7 @@ export default function ApiKeyModal({ onClose, onStatusChange }) {
         <p className="mt-4 inline-flex items-start gap-1.5 text-xs text-ink-3">
           <Lock size={12} className="mt-0.5 shrink-0" />
           密钥经操作系统级加密后仅存储在本机，不会上传到任何服务器；
-          调用 Kimi API 时由本应用直接发往 Moonshot 官方接口。
+          调用 DeepSeek API 时由本应用直接发往 DeepSeek 官方接口。
         </p>
       </div>
     </div>

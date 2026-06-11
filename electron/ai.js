@@ -1,5 +1,5 @@
-// Kimi API 调用模块（运行在 Electron 主进程）
-// 职责：把文件清单发给 Kimi，让它返回 JSON 格式的文件分类方案
+// DeepSeek API 调用模块（运行在 Electron 主进程）
+// 职责：把文件清单发给 DeepSeek，让它返回 JSON 格式的文件分类方案
 // （一次分析返回三套思路不同的方案；也支持按用户对话要求调整某套方案）。
 //
 // 为什么放在主进程而不是页面里：
@@ -8,15 +8,17 @@
 const OpenAI = require('openai')
 const keyStore = require('./keyStore')
 
-// Moonshot 提供 OpenAI 兼容接口，用 openai SDK 指向其 baseURL 调用
-const BASE_URL = 'https://api.moonshot.cn/v1'
+// DeepSeek 提供 OpenAI 兼容接口，用 openai SDK 指向其 baseURL 调用
+const BASE_URL = 'https://api.deepseek.com'
 
-// 使用的模型。选型依据（2026-06 实测，6 文件清单）：
-// - moonshot-v1-auto ≈ 3.7s；kimi-k2.6 / k2.5 是思考型模型，≈ 30s（大部分时间在生成用不到的推理过程）
-// - auto 会按输入长度自动选 8k/32k/128k 上下文，文件很多时也不会超限
-const MODEL = 'moonshot-v1-auto'
+// 使用的模型（2026-06 选型）：
+// - deepseek-v4-flash 是官方主模型 ID；deepseek-chat / deepseek-reasoner 是兼容别名，
+//   2026-07-24 起弃用，不要换回去
+// - 该模型思考模式默认开启，本应用的任务不需要推理过程，
+//   streamCompletion 里显式传 thinking: { type: 'disabled' } 关闭（否则慢一个量级）
+const MODEL = 'deepseek-v4-flash'
 
-// 系统提示词：约束 Kimi 一次返回三套思路不同的 JSON 分类方案
+// 系统提示词：约束 DeepSeek 一次返回三套思路不同的 JSON 分类方案
 const SYSTEM_PROMPT = `你是文件整理专家。根据文件清单，设计恰好 3 套思路明显不同的分类方案。
 最重要的规则：三套方案是给用户三选一的独立备选项，不是互补关系。
 每一套方案都必须独立地把清单中的全部文件分类完毕：清单里的每个文件，
@@ -52,7 +54,7 @@ function formatSize(bytes) {
 }
 
 /**
- * 把文件列表格式化为发给 Kimi 的文本清单，每行一个文件：
+ * 把文件列表格式化为发给 DeepSeek 的文本清单，每行一个文件：
  * 文件名 | 类型 | 大小 | 修改日期
  */
 function buildFileList(files) {
@@ -78,7 +80,7 @@ function parseJson(text) {
 }
 
 /**
- * 从 Kimi 的回复文本中解析出多套分类方案。
+ * 从 DeepSeek 的回复文本中解析出多套分类方案。
  * 校验 plans 是非空数组、每套有 folders 数组；
  * 方案名缺失或重复时回退为「方案一/二/三」——前端 Tab 的 key 用的是方案名，必须唯一。
  */
@@ -108,7 +110,7 @@ function parsePlans(text) {
  * 没有则抛出引导用户去设置的错误。
  */
 function resolveApiKey() {
-  const key = keyStore.loadKey() || process.env.MOONSHOT_API_KEY
+  const key = keyStore.loadKey() || process.env.DEEPSEEK_API_KEY
   if (!key) {
     throw new Error('未设置 API Key，请点击右上角 ⚙️ 设置')
   }
@@ -137,21 +139,21 @@ function translateError(err) {
     return new Error('API Key 无效或已被撤销，请检查后重新设置')
   }
   if (err instanceof OpenAI.RateLimitError) {
-    // Moonshot 的 429 有三种含义，按上游消息区分，避免把服务端过载/余额不足误报成"请求频繁"
-    const detail = String(err.message || '')
-    if (/overloaded/i.test(detail)) {
-      return new Error('Kimi 服务端当前过载，请稍后重试（不是本机请求频率问题）')
-    }
-    if (/quota|balance|not active|frozen/i.test(detail)) {
-      return new Error('账户配额或余额不足，请到 platform.moonshot.cn 检查账户状态')
-    }
-    return new Error('请求频率超出账户限制，请稍后再试')
+    // DeepSeek 的 429 只有一种含义：请求过快 / 动态并发限流（余额不足是 402、过载是 503）
+    return new Error('请求过于频繁或触发服务端并发限流，请稍后再试')
   }
   if (err instanceof OpenAI.APIConnectionError) {
-    return new Error('无法连接到 Kimi API，请检查网络')
+    return new Error('无法连接到 DeepSeek API，请检查网络')
   }
   if (err instanceof OpenAI.APIError) {
-    return new Error(`Kimi API 错误（${err.status}）：${err.message}`)
+    // 402/503 没有专属的 SDK 异常类，按状态码区分
+    if (err.status === 402) {
+      return new Error('账户余额不足，请到 platform.deepseek.com 充值')
+    }
+    if (err.status === 503) {
+      return new Error('DeepSeek 服务端当前过载，请稍后重试（不是本机问题）')
+    }
+    return new Error(`DeepSeek API 错误（${err.status}）：${err.message}`)
   }
   return err
 }
@@ -173,7 +175,7 @@ async function testApiKey(rawKey) {
 }
 
 /**
- * 流式调用 Kimi 并收集完整回复文本。
+ * 流式调用 DeepSeek 并收集完整回复文本。
  * 每收到一段就调用 onProgress(已接收字符数)，供 UI 展示进度。
  * analyzeFiles 和 adjustPlan 共用，失败时抛出翻译后的中文 Error。
  */
@@ -188,6 +190,9 @@ async function streamCompletion(messages, onProgress) {
       max_tokens: 16000,
       stream: true,
       messages,
+      // deepseek-v4-flash 思考模式默认开启，删掉这行响应会慢一个量级
+      // （SDK 会把未知参数透传进请求体）
+      thinking: { type: 'disabled' },
     })
     for await (const chunk of stream) {
       const delta = chunk.choices?.[0]?.delta?.content
@@ -201,7 +206,7 @@ async function streamCompletion(messages, onProgress) {
   }
 
   if (!text) {
-    throw new Error('Kimi 没有返回文本内容')
+    throw new Error('DeepSeek 没有返回文本内容')
   }
   return text
 }
@@ -231,7 +236,7 @@ function fillMissingFiles(plans, files) {
 }
 
 /**
- * 调用 Kimi 分析文件清单，返回三套分类方案：
+ * 调用 DeepSeek 分析文件清单，返回三套分类方案：
  * [ { name: 方案名, folders: [ { name, files: [...], reason } ] } ]
  * 失败时抛出带中文说明的 Error。
  */
@@ -250,7 +255,7 @@ async function analyzeFiles(files, onProgress) {
   } catch (err) {
     // 文件多时输出 JSON 很长，截断是解析失败的常见原因（阈值与前端确认框一致）
     const hint = files.length > 300 ? '；文件数量过多可能导致方案生成不完整，请减少文件后重试' : ''
-    throw new Error(`无法解析 Kimi 返回的 JSON：${err.message}${hint}`)
+    throw new Error(`无法解析 DeepSeek 返回的 JSON：${err.message}${hint}`)
   }
   return fillMissingFiles(plans, files)
 }
@@ -285,7 +290,7 @@ async function adjustPlan({ files, plan, history }, onProgress) {
       throw new Error('返回的 JSON 缺少 folders 数组')
     }
   } catch (err) {
-    throw new Error(`无法解析 Kimi 返回的 JSON：${err.message}`)
+    throw new Error(`无法解析 DeepSeek 返回的 JSON：${err.message}`)
   }
   return {
     reply: typeof data.reply === 'string' && data.reply.trim() ? data.reply.trim() : '已按要求调整',

@@ -18,7 +18,7 @@ function keyFilePath() {
 let cachedKey = null
 
 /**
- * 校验密钥格式：trim 后必须以 sk- 开头且不含空白字符（Moonshot 密钥格式）。
+ * 校验密钥格式：trim 后必须以 sk- 开头且不含空白字符（DeepSeek 密钥格式，同为 sk- 前缀）。
  * 返回清洗后的密钥，不合法时抛错。
  */
 function normalizeKey(rawKey) {

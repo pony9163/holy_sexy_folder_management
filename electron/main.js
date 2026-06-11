@@ -126,7 +126,7 @@ ipcMain.handle('select-folder', async () => {
 })
 
 // IPC handler：渲染进程调用 window.api.analyzeFiles(files) 时触发
-// 把文件清单发给 Kimi 做智能分类，返回：
+// 把文件清单发给 DeepSeek 做智能分类，返回：
 // - 成功 → { ok: true, plans: [ { name, folders: [...] } ] }（三套思路不同的方案）
 // - 失败 → { ok: false, error: 中文错误信息 }（不让异常裸穿 IPC）
 ipcMain.handle('analyze-files', async (event, files) => {
@@ -136,7 +136,7 @@ ipcMain.handle('analyze-files', async (event, files) => {
       event.sender.send('analyze-progress', received)
     })
     // 在主进程终端也打印一份，方便在 npm run dev 的终端里直接观察结果
-    console.log('Kimi 分类方案:', JSON.stringify(plans, null, 2))
+    console.log('DeepSeek 分类方案:', JSON.stringify(plans, null, 2))
     return { ok: true, plans }
   } catch (err) {
     console.error('分析失败:', err.message)
@@ -155,7 +155,7 @@ ipcMain.handle('adjust-plan', async (event, payload) => {
     const result = await adjustPlan(payload, (received) => {
       event.sender.send('adjust-progress', received)
     })
-    console.log('Kimi 调整后方案:', JSON.stringify(result.folders, null, 2))
+    console.log('DeepSeek 调整后方案:', JSON.stringify(result.folders, null, 2))
     return { ok: true, ...result }
   } catch (err) {
     console.error('调整失败:', err.message)

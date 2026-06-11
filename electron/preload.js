@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld('api', {
   // 对应 main.js 中的 ipcMain.handle('select-folder')
   selectFolder: () => ipcRenderer.invoke('select-folder'),
 
-  // 把文件清单发给主进程，由主进程调用 Kimi API 生成分类方案
+  // 把文件清单发给主进程，由主进程调用 DeepSeek API 生成分类方案
   // 对应 main.js 中的 ipcMain.handle('analyze-files')
   analyzeFiles: (files) => ipcRenderer.invoke('analyze-files', files),
 
