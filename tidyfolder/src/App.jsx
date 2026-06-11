@@ -1,11 +1,12 @@
 // 应用主界面：
 // - 顶部：标题 + "分析" / "选择文件夹" / ⚙️ 设置按钮
 // - 选中文件夹后：显示当前路径、条目数和文件列表表格
-// - 点「分析」：把文件清单发给 Kimi 生成分类方案，结果先打印到控制台
+// - 点「分析」：把文件清单发给 Kimi 生成分类方案，结果以预览卡片展示（可排除文件后确认）
 // - ⚙️ 设置：填写/管理 Moonshot API Key（加密存储在主进程侧）
 import { useEffect, useState } from 'react'
 import FileTable from './components/FileTable'
 import ApiKeyModal from './components/ApiKeyModal'
+import PlanPreview from './components/PlanPreview'
 
 export default function App() {
   const [folderPath, setFolderPath] = useState(null) // 当前选中的文件夹路径
@@ -16,6 +17,7 @@ export default function App() {
   const [analyzeStatus, setAnalyzeStatus] = useState(null) // 分析结果提示 { ok, message }
   const [showSettings, setShowSettings] = useState(false)  // 是否打开 API Key 设置弹窗
   const [keyStatus, setKeyStatus] = useState(null)   // 密钥状态（只含掩码等元信息）
+  const [plans, setPlans] = useState(null)            // 分析得到的整理方案数组（null = 不显示预览）
 
   // 启动时查一次密钥状态，用于在界面上给出引导提示
   useEffect(() => {
@@ -35,6 +37,7 @@ export default function App() {
         setFolderPath(result.folderPath)
         setFiles(result.files)
         setAnalyzeStatus(null) // 换了文件夹，清掉旧的分析提示
+        setPlans(null)         // 旧文件夹的整理预览也一并清掉
       }
     } finally {
       setLoading(false)
@@ -46,12 +49,13 @@ export default function App() {
     setAnalyzing(true)
     setAnalyzeStatus(null)
     setProgress(0)
+    setPlans(null) // 先卸载旧预览，重新分析后排除状态从零开始
     try {
       const result = await window.api.analyzeFiles(files)
       if (result.ok) {
-        // 第一阶段先把解析后的 JSON 打印出来（主进程终端也会打印一份）
-        console.log('Kimi 分类方案:', result.plan)
-        setAnalyzeStatus({ ok: true, message: `分析完成：共 ${result.plan.folders.length} 个分类，结果已打印到控制台（DevTools）` })
+        // 按"方案数组"包装，为未来多套方案预留结构（当前 AI 只返回一套）
+        setPlans([{ name: '方案一', folders: result.plan.folders }])
+        setAnalyzeStatus({ ok: true, message: `分析完成：共 ${result.plan.folders.length} 个分类，请在下方预览确认` })
       } else {
         setAnalyzeStatus({ ok: false, message: result.error })
       }
@@ -124,7 +128,12 @@ export default function App() {
               <span className="font-medium text-gray-700">{folderPath}</span>
               <span className="ml-2">共 {files.length} 项（仅第一层）</span>
             </p>
-            <FileTable files={files} />
+            {/* 有整理方案时显示预览界面，否则显示原始文件列表 */}
+            {plans ? (
+              <PlanPreview plans={plans} files={files} onCancel={() => setPlans(null)} />
+            ) : (
+              <FileTable files={files} />
+            )}
           </>
         ) : (
           /* 空状态：还没有选择文件夹时的提示 */
