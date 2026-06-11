@@ -68,7 +68,7 @@ export default function HistoryModal({ onClose, onRestored }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg animate-pop-in rounded-2xl border border-line bg-surface p-6 shadow-xl"
+        className="w-full max-w-lg animate-pop-in rounded-2xl border border-line bg-surface p-6 shadow-modal"
       >
         {/* ===== 列表阶段 ===== */}
         {phase === null && (
@@ -87,7 +87,7 @@ export default function HistoryModal({ onClose, onRestored }) {
             </div>
 
             {error && (
-              <p className="mb-3 rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-700 dark:bg-red-400/10 dark:text-red-300">
+              <p className="mb-3 rounded-lg bg-danger/10 px-4 py-2.5 text-sm text-danger">
                 {error}
               </p>
             )}
@@ -103,26 +103,26 @@ export default function HistoryModal({ onClose, onRestored }) {
                   return (
                     <li
                       key={item.fileName}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-line px-4 py-3 transition-colors hover:bg-sunken"
+                      className="flex items-center justify-between gap-3 rounded-lg border border-line px-4 py-3 transition-colors hover:bg-sunken/60"
                     >
                       <div className="min-w-0">
-                        <p className="flex items-center gap-2 text-sm text-ink">
+                        <p className="flex items-center gap-2 text-sm tabular-nums text-ink">
                           {fmt(item.createdAt)}
                           {item.undone && (
                             <span
                               title={item.undoneAt ? `撤销于 ${fmt(item.undoneAt)}` : undefined}
-                              className="rounded bg-sunken px-1.5 py-0.5 text-xs text-ink-3"
+                              className="rounded-md bg-sunken px-2 py-0.5 text-xs text-ink-3"
                             >
                               已撤销
                             </span>
                           )}
                           {item.failedCount > 0 && (
-                            <span className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-600 dark:bg-red-400/10 dark:text-red-300">
+                            <span className="rounded-md bg-danger/10 px-2 py-0.5 text-xs tabular-nums text-danger">
                               {item.failedCount} 个失败
                             </span>
                           )}
                         </p>
-                        <p className="truncate text-xs text-ink-3" title={item.folderPath}>
+                        <p className="truncate text-xs tabular-nums text-ink-3" title={item.folderPath}>
                           {item.folderPath} · {item.moveCount} 个文件
                         </p>
                       </div>
@@ -130,7 +130,7 @@ export default function HistoryModal({ onClose, onRestored }) {
                         onClick={() => askRestore(item)}
                         disabled={!restorable}
                         title={restorable ? '恢复到这次整理之前' : '该时间点之后的整理都已撤销'}
-                        className="shrink-0 rounded-full border border-amber-300 bg-amber-50 px-3.5 py-1.5 text-sm text-amber-700 transition hover:bg-amber-100 active:scale-[0.98] disabled:opacity-40 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300 dark:hover:bg-amber-400/20"
+                        className="shrink-0 rounded-full border border-warning/30 bg-warning/10 px-3.5 py-1.5 text-sm text-warning transition hover:bg-warning/20 active:scale-[0.98] disabled:opacity-40"
                       >
                         恢复
                       </button>
@@ -157,7 +157,7 @@ export default function HistoryModal({ onClose, onRestored }) {
                   {pending.chain.length} 次整理、
                   {pending.chain.reduce((s, h) => s + h.moveCount, 0)} 个文件将移回原位：
                 </p>
-                <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto rounded-lg bg-sunken px-3 py-2 text-sm text-ink-2">
+                <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto rounded-lg bg-sunken px-3 py-2 text-sm tabular-nums text-ink-2">
                   {pending.chain.map((h) => (
                     <li key={h.fileName}>
                       {fmt(h.createdAt)} · {h.moveCount} 个文件
@@ -181,7 +181,7 @@ export default function HistoryModal({ onClose, onRestored }) {
               </button>
               <button
                 onClick={handleRestore}
-                className="rounded-full bg-amber-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-amber-500 active:scale-[0.98]"
+                className="rounded-full bg-accent px-5 py-2 text-sm font-medium text-white transition hover:bg-accent-hi active:scale-[0.98]"
               >
                 开始恢复{pending.chain.length > 1 ? `（连带撤销 ${pending.chain.length} 次）` : ''}
               </button>
@@ -192,14 +192,14 @@ export default function HistoryModal({ onClose, onRestored }) {
         {/* ===== 恢复中：进度条，遮罩不可关 ===== */}
         {phase === 'running' && (
           <>
-            <p className="inline-flex items-center gap-2 text-ink">
-              <Loader2 size={16} className="animate-spin text-amber-500" />
+            <p className="inline-flex items-center gap-2 tabular-nums text-ink">
+              <Loader2 size={16} className="animate-spin text-accent" />
               正在恢复…
               {restoreProgress ? ` ${restoreProgress.current}/${restoreProgress.total}` : ''}
             </p>
-            <div className="mt-4 h-2 overflow-hidden rounded-full bg-sunken">
+            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-sunken">
               <div
-                className="h-full rounded-full bg-amber-500 transition-all"
+                className="h-full rounded-full bg-accent transition-all"
                 style={{
                   width: restoreProgress
                     ? `${Math.round((restoreProgress.current / restoreProgress.total) * 100)}%`
@@ -215,8 +215,8 @@ export default function HistoryModal({ onClose, onRestored }) {
           <>
             {result.ok ? (
               <>
-                <p className="inline-flex items-center gap-2 text-ink">
-                  <CheckCircle2 size={18} className="text-emerald-500" />
+                <p className="inline-flex items-center gap-2 tabular-nums text-ink">
+                  <CheckCircle2 size={18} className="text-success" />
                   恢复完成：已连带撤销 {result.restoredRecords} 次整理，移回 {result.restored}{' '}
                   个文件
                 </p>
@@ -237,7 +237,7 @@ export default function HistoryModal({ onClose, onRestored }) {
                 )}
               </>
             ) : (
-              <p className="text-red-700 dark:text-red-300">恢复失败：{result.error}</p>
+              <p className="text-danger">恢复失败：{result.error}</p>
             )}
             <div className="mt-5 flex justify-end">
               <button

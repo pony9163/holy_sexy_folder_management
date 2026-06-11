@@ -49,7 +49,10 @@ src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（elec
   ├─ organize:history        → fileOps listHistory（历史弹窗的快照摘要列表）
   ├─ organize:restore        → fileOps restoreTo（顺序回滚到某次整理之前）
   ├─ organize:clean-folders  → fileOps cleanEmptyCreatedFolders（删撤销后留下的空分类文件夹）
-  └─ api-key:*               → electron/keyStore.js（密钥存取）
+  ├─ api-key:*               → electron/keyStore.js（密钥存取）
+  ├─ window:is-maximized     → 查询初始最大化状态 { ok, maximized }
+  └─ window:minimize / maximize-toggle / close —— 自绘窗口按钮，fire-and-forget 的
+     ipcMain.on 单向消息（无返回值；{ok} 约定只针对 handle），preload 里是 api.win.*
 
 反向推送（主进程 → 渲染进程）均为「订阅函数返回取消订阅函数」模式（参考 onAnalyzeProgress）：
   analyze-progress           —— 分析期间推送已接收字符数（number）
@@ -57,6 +60,7 @@ src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（elec
   organize:progress          —— 整理移动进度 { current, total }
   organize:undo-progress     —— 撤销进度 { current, total }
   organize:restore-progress  —— 历史恢复进度 { current, total }
+  window:maximized-changed   —— 最大化状态（boolean），WindowControls 据此切换图标
   进度 channel 故意分开不复用：App 订阅 analyze-progress/undo-progress，
   PlanPreview 订阅 adjust-progress，HistoryModal 订阅 restore-progress，复用会状态串台
 ```
@@ -96,8 +100,10 @@ src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（elec
 
 ### 主进程窗口行为（electron/main.js）
 
+- **无边框窗口**（2026-06 UI 升级）：mac 用 `titleBarStyle: 'hiddenInset'`（保留原生红绿灯），其他平台 `frame: false`（窗口控制按钮由渲染进程 WindowControls 自绘）。**逃生舱**：`HSF_NATIVE_FRAME=1` 启动即退回系统原生边框（某个 WM 下出问题时不用改代码）。Linux 上无 CSD 的窗口直角、无投影属合成器限制（VS Code 同此），**不要**用 `transparent: true` 兜底（禁用部分硬件加速、部分 WM 下边缘 resize 失效）；frame:false 下边缘拖拽 resize 是 Electron 自带的
+- 窗口 `maximize`/`unmaximize` 事件推送 `window:maximized-changed` 给渲染进程换图标
 - **非 mac 平台移除默认菜单栏**（`Menu.setApplicationMenu(null)`）：mac 必须保留——系统菜单承载 Cmd+C/V 等编辑快捷键，删掉会坏复制粘贴。副作用：Ctrl+R / Ctrl+Shift+I 等默认快捷键随菜单失效，开发要 DevTools 临时注释该行
-- 窗口 `backgroundColor: '#17181c'`（与默认暗主题 --canvas 一致）+ `show: false` + `ready-to-show` 再显示：防启动白闪，别当成多余配置清理掉
+- 窗口 `backgroundColor: '#0e0e10'`（与默认暗主题 --canvas **真正一致**，改 index.css 暗色底必须同步此处）+ `show: false` + `ready-to-show` 再显示：防启动白闪，别当成多余配置清理掉
 
 ### 打包与 CI
 
@@ -109,8 +115,11 @@ src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（elec
 ### 前端
 
 - Tailwind v4 走 `@tailwindcss/vite` 插件：**没有也不需要** `tailwind.config.js`/PostCSS 配置，主题系统全在 `src/index.css`
-- **双主题机制**：`index.css` 用 `@custom-variant dark` 把暗色绑定到 html 的 `.dark` 类（App.jsx 的 theme state 切换 + localStorage `ui-theme` 持久化，默认 dark）；语义令牌（`--canvas/--surface/--sunken/--line/--ink/--ink-2/--ink-3/--accent`）经 `@theme inline` 注册成 Tailwind 颜色。**改样式用令牌类**（`bg-surface`、`text-ink-2`、`border-line` 等，一个类两主题通吃），不要写死 gray-xxx；状态色（emerald/amber/red）保留原色相并加 `dark:` 半透明变体。图标用 lucide-react（行内 15-16、按钮 16-18），不要混回 emoji；顶栏按钮必须 `whitespace-nowrap`（中文被挤压会逐字竖排）
-- **视觉气质是 Apple/macOS 系**，新 UI 要保持：accent 是苹果蓝（亮 #0071e3 / 暗 #0a84ff，蓝底始终白字）、边框是发丝级半透明、字体栈 -apple-system + 苹方在 index.css；顶栏是 sticky 毛玻璃（`bg-canvas/70 backdrop-blur-xl`）；主操作按钮胶囊（rounded-full）、卡片/弹窗 rounded-2xl、弹窗遮罩带 `backdrop-blur-sm`；约束栏用 App.jsx 内的 `Switch` 组件（iOS 拨动开关），方案 Tab 是 segmented control（凹槽 bg-sunken p-1 + 选中段 bg-surface 浮起）
+- **双主题机制**：`index.css` 用 `@custom-variant dark` 把暗色绑定到 html 的 `.dark` 类（App.jsx 的 theme state 切换 + localStorage `ui-theme` 持久化，默认 dark）；语义令牌（`--canvas/--surface/--sunken/--line/--ink/--ink-2/--ink-3/--accent`）经 `@theme inline` 注册成 Tailwind 颜色。**改样式用令牌类**（`bg-surface`、`text-ink-2`、`border-line` 等，一个类两主题通吃），不要写死 gray-xxx。**层级约定两主题一致：canvas < sunken < surface（由低到浮起）**——暗色 sunken 必须介于 canvas 和 surface 之间，曾经 sunken 比 surface 亮是层级倒置已修正，勿改回。图标用 lucide-react（行内 15-16、按钮 16-18），不要混回 emoji；顶栏按钮必须 `whitespace-nowrap`（中文被挤压会逐字竖排）
+- **状态色走令牌**：`--success/--warning/--danger`（亮暗两套在 index.css），弱化形态用透明度修饰符（`bg-warning/10`、`border-danger/30`、`hover:bg-danger/10`），**不写 `dark:` 变体**（令牌随主题切换）；**实底 CTA 按钮一律 accent 蓝**（macOS 默认按钮惯例），绿色只用于成功反馈、琥珀只用于撤销/恢复类警示性次级按钮（半透明形态）。例外：WindowControls 关闭按钮 hover 固定 `#e81123` 红（窗口语义不是状态语义）
+- **阴影分级**（index.css 注册成 `shadow-card/raised/modal`，亮暗两套、暗色更重）：card→卡片/表格容器/约束栏/聊天面板；raised→状态提示条；modal→弹窗。卡片同时保留 `border border-line` 发丝边
+- **视觉气质是 Apple/macOS 系**，新 UI 要保持：accent 是苹果蓝（亮 #0071e3 / 暗 #0a84ff，蓝底始终白字）、边框是发丝级半透明、字体栈 -apple-system + 苹方在 index.css；顶栏是 sticky 毛玻璃（`bg-canvas/70 backdrop-blur-xl`）；圆角规范：按钮胶囊 rounded-full、卡片/表格/聊天面板 rounded-xl、弹窗 rounded-2xl，弹窗遮罩带 `backdrop-blur-sm`；约束栏用 App.jsx 内的 `Switch` 组件（iOS 拨动开关），方案 Tab 是 segmented control（凹槽 bg-sunken p-1 + 选中段 bg-surface 浮起）；**数字（大小/日期/计数/进度）一律 `tabular-nums`**；全局 `:focus-visible` accent 环和自定义滚动条在 index.css，别在组件里另写
+- **header 即标题栏**（无边框窗口）：`app-drag` 整体拖拽 + 交互区 `app-no-drag`（两个工具类在 index.css），高 h-13；mac `pl-20` 给红绿灯留白，非 mac `pr-[150px]` 给 WindowControls（绝对定位贴右上，`!isMac && window.api.win` 才渲染）；双击最大化**仅 Linux** 绑 JS（mac/Windows 系统原生处理，再绑会双重切换）；平台标识 `window.api.platform` 模块级取一次
 - `vite.config.js` 的 `base: './'` 是生产模式 `file://` 加载 dist 所必需的，别删
 - 文件列表排序规则在 `FileTable.jsx`：文件夹在前，组内 `localeCompare(name, 'zh')`；文件夹的大小列显示 `—`
 - 约束开关栏在 `App.jsx`：三个开关（不整理已有文件夹默认开/不动最近 7 天/排除扩展名），状态持久化到 localStorage（`organize-constraints-v1`）；App 用 useMemo 把 files 分成 `eligibleFiles`（发给 AI、传给 PlanPreview）和 `skippedEntries`（预览灰色区展示）；分析中或预览打开时整栏锁定，防止方案与约束不一致；PlanPreview 的 `resolvedFolders` 只认 fileMap 成员（不再特判 isDirectory，目录参与与否由 App 过滤决定）

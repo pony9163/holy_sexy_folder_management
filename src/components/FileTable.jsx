@@ -10,20 +10,20 @@ export default function FileTable({ files }) {
   })
 
   return (
-    <div className="animate-fade-in overflow-hidden rounded-2xl border border-line">
+    <div className="animate-fade-in overflow-hidden rounded-xl border border-line shadow-card">
       <table className="w-full text-left text-sm">
-        {/* 表头与表体同色 + 发丝分隔线：macOS Finder 列表感 */}
-        <thead className="border-b border-line bg-surface text-ink-3">
+        {/* 表头用 sunken 半透明与表体分离（不再同色），文字小一号弱化 */}
+        <thead className="border-b border-line bg-sunken/60 text-xs text-ink-3">
           <tr>
-            <th className="px-4 py-3 font-medium">名称</th>
-            <th className="px-4 py-3 font-medium">类型</th>
-            <th className="px-4 py-3 font-medium">大小</th>
-            <th className="px-4 py-3 font-medium">修改日期</th>
+            <th className="px-4 py-2.5 font-medium">名称</th>
+            <th className="px-4 py-2.5 font-medium">类型</th>
+            <th className="px-4 py-2.5 font-medium">大小</th>
+            <th className="px-4 py-2.5 font-medium">修改日期</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-line bg-surface">
           {sorted.map((file) => (
-            <tr key={file.name} className="transition-colors hover:bg-sunken">
+            <tr key={file.name} className="transition-colors hover:bg-sunken/60">
               {/* 名称：文件夹用 Folder 图标（强调色），文件用 FileText */}
               <td className="px-4 py-2.5 text-ink">
                 <span className="inline-flex items-center gap-2">
@@ -36,11 +36,11 @@ export default function FileTable({ files }) {
                 </span>
               </td>
               <td className="px-4 py-2.5 text-ink-2">{file.type}</td>
-              {/* 大小：文件夹的 stat size 没有实际意义，显示「—」 */}
-              <td className="px-4 py-2.5 text-ink-2">
+              {/* 大小：文件夹的 stat size 没有实际意义，显示「—」；数字列等宽对齐 */}
+              <td className="px-4 py-2.5 tabular-nums text-ink-2">
                 {file.isDirectory ? '—' : formatSize(file.size)}
               </td>
-              <td className="px-4 py-2.5 text-ink-2">{formatDate(file.mtime)}</td>
+              <td className="px-4 py-2.5 tabular-nums text-ink-2">{formatDate(file.mtime)}</td>
             </tr>
           ))}
         </tbody>

@@ -10,19 +10,23 @@ import { Folder, FileText, MessageSquareText, Send, Loader2, CheckCircle2 } from
 import { formatSize } from '../utils/format'
 
 // 单个方案卡片：一个新文件夹 + 其下将移入的文件列表
-function FolderCard({ folder, fileMap, excludedSet, onToggle }) {
+// style 由父组件传入 animationDelay 做 stagger 入场（animate-fade-in 是 both 填充，delay 期间不闪现）
+function FolderCard({ folder, fileMap, excludedSet, onToggle, style }) {
   return (
-    <div className="animate-fade-in overflow-hidden rounded-2xl border border-line bg-surface">
+    <div
+      style={style}
+      className="animate-fade-in overflow-hidden rounded-xl border border-line bg-surface shadow-card"
+    >
       {/* 卡片头：文件夹名 + 文件计数 */}
       <div className="flex items-center justify-between border-b border-line bg-sunken px-4 py-3">
         <span className="inline-flex items-center gap-2 font-medium text-ink">
           <Folder size={16} className="text-accent" />
           {folder.name}
         </span>
-        <span className="text-sm text-ink-3">{folder.validNames.length} 个文件</span>
+        <span className="text-sm tabular-nums text-ink-3">{folder.validNames.length} 个文件</span>
       </div>
       {/* AI 给出的分类理由 */}
-      <p className="px-4 py-2 text-sm text-ink-2">{folder.reason}</p>
+      <p className="px-4 py-2.5 text-sm text-ink-2">{folder.reason}</p>
       {/* 将移入该文件夹的条目列表（约束放行时可能含整个文件夹） */}
       <ul className="divide-y divide-line">
         {folder.validNames.map((name) => {
@@ -44,14 +48,14 @@ function FolderCard({ folder, fileMap, excludedSet, onToggle }) {
               </span>
               <span className="flex items-center gap-3">
                 {/* 文件夹的大小列与 FileTable 一致显示 — */}
-                <span className="text-ink-3">{entry.isDirectory ? '—' : formatSize(entry.size)}</span>
+                <span className="tabular-nums text-ink-3">{entry.isDirectory ? '—' : formatSize(entry.size)}</span>
                 {/* 排除/恢复开关：误点可挽回 */}
                 <button
                   onClick={() => onToggle(name)}
-                  className={`rounded border px-2 py-0.5 text-xs transition active:scale-[0.97] ${
+                  className={`rounded-md border px-2.5 py-1 text-xs transition active:scale-[0.97] ${
                     excluded
                       ? 'border-line text-ink-2 hover:bg-sunken'
-                      : 'border-red-200 text-red-600 hover:bg-red-50 dark:border-red-400/30 dark:text-red-300 dark:hover:bg-red-400/10'
+                      : 'border-danger/30 text-danger hover:bg-danger/10'
                   }`}
                 >
                   {excluded ? '恢复' : '排除'}
@@ -252,15 +256,16 @@ export default function PlanPreview({
         ))}
       </div>
 
-      {/* 卡片树：每个新文件夹一张卡片 */}
+      {/* 卡片树：每个新文件夹一张卡片，依次错峰入场（delay 封顶，长列表不拖沓） */}
       <div className="space-y-4">
-        {resolvedFolders.map((folder) => (
+        {resolvedFolders.map((folder, i) => (
           <FolderCard
             key={folder.name}
             folder={folder}
             fileMap={fileMap}
             excludedSet={excluded[activeIndex]}
             onToggle={toggleExclude}
+            style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }}
           />
         ))}
       </div>
@@ -268,7 +273,7 @@ export default function PlanPreview({
       {/* 被约束跳过的条目：灰色列出名字和原因，不出现在任何方案卡片里 */}
       {skipped.length > 0 && (
         <div className="mt-4 max-h-40 overflow-y-auto rounded-xl bg-sunken px-4 py-2.5 text-sm text-ink-3">
-          <p className="mb-1">以下 {skipped.length} 项按约束跳过，不参与整理：</p>
+          <p className="mb-1 tabular-nums">以下 {skipped.length} 项按约束跳过，不参与整理：</p>
           <ul className="space-y-0.5">
             {skipped.map((s) => (
               <li key={s.name}>
@@ -280,7 +285,7 @@ export default function PlanPreview({
       )}
 
       {/* 聊天面板：用自然语言让 AI 改写当前选中的方案 */}
-      <div className="mt-4 rounded-2xl border border-line bg-surface">
+      <div className="mt-4 rounded-xl border border-line bg-surface shadow-card">
         <p className="inline-flex w-full items-center gap-2 border-b border-line bg-sunken px-4 py-2.5 text-sm font-medium text-ink-2">
           <MessageSquareText size={15} className="text-accent" />
           对「{localPlans[activeIndex].name}」提调整要求
@@ -295,7 +300,7 @@ export default function PlanPreview({
           {chats[activeIndex].map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <p
-                className={`max-w-[80%] animate-fade-in rounded-2xl px-3.5 py-2 text-sm ${
+                className={`max-w-[80%] animate-fade-in rounded-xl px-3.5 py-2 text-sm ${
                   msg.role === 'user' ? 'bg-accent text-white' : 'bg-sunken text-ink'
                 }`}
               >
@@ -306,7 +311,7 @@ export default function PlanPreview({
           {/* 调整中提示：流式接收进度 */}
           {adjusting && (
             <div className="flex justify-start">
-              <p className="inline-flex max-w-[80%] animate-fade-in items-center gap-1.5 rounded-2xl bg-sunken px-3.5 py-2 text-sm text-ink-2">
+              <p className="inline-flex max-w-[80%] animate-fade-in items-center gap-1.5 rounded-xl bg-sunken px-3.5 py-2 text-sm tabular-nums text-ink-2">
                 <Loader2 size={14} className="animate-spin" />
                 {adjustProgress > 0
                   ? `调整中…已接收 ${adjustProgress} 字`
@@ -316,7 +321,7 @@ export default function PlanPreview({
           )}
           {/* 调整失败：面板内显示错误行，不打断已有对话 */}
           {adjustError && (
-            <p className="text-sm text-red-600 dark:text-red-300">调整失败：{adjustError}</p>
+            <p className="text-sm text-danger">调整失败：{adjustError}</p>
           )}
           <div ref={chatBottomRef} />
         </div>
@@ -352,7 +357,7 @@ export default function PlanPreview({
           onClick={() => setPhase('confirm')}
           disabled={moveCount === 0}
           title={moveCount === 0 ? '没有可整理的文件' : undefined}
-          className="rounded-full bg-emerald-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 active:scale-[0.98] disabled:opacity-50"
+          className="rounded-full bg-accent px-5 py-2 text-sm font-medium text-white transition hover:bg-accent-hi active:scale-[0.98] disabled:opacity-50"
         >
           确认整理
         </button>
@@ -366,13 +371,13 @@ export default function PlanPreview({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm animate-pop-in rounded-2xl border border-line bg-surface p-6 shadow-xl"
+            className="w-full max-w-sm animate-pop-in rounded-2xl border border-line bg-surface p-6 shadow-modal"
           >
             {phase === 'confirm' && (
               <>
                 <p className="text-ink">
                   将在 <span className="font-medium">{folderPath}</span> 内创建分类文件夹并移动{' '}
-                  {moveCount} 个文件
+                  <span className="tabular-nums">{moveCount}</span> 个文件
                 </p>
                 <p className="mt-2 text-sm text-ink-2">
                   移动前会保存完整的位置记录，整理后可一键撤销
@@ -386,7 +391,7 @@ export default function PlanPreview({
                   </button>
                   <button
                     onClick={handleOrganize}
-                    className="rounded-full bg-emerald-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 active:scale-[0.98]"
+                    className="rounded-full bg-accent px-5 py-2 text-sm font-medium text-white transition hover:bg-accent-hi active:scale-[0.98]"
                   >
                     开始整理
                   </button>
@@ -396,15 +401,15 @@ export default function PlanPreview({
 
             {phase === 'running' && (
               <>
-                <p className="inline-flex items-center gap-2 text-ink">
-                  <Loader2 size={16} className="animate-spin text-emerald-500" />
+                <p className="inline-flex items-center gap-2 tabular-nums text-ink">
+                  <Loader2 size={16} className="animate-spin text-accent" />
                   正在移动文件…
                   {moveProgress ? ` ${moveProgress.current}/${moveProgress.total}` : ''}
                 </p>
-                {/* 进度条：按已移动数量填充 */}
-                <div className="mt-4 h-2 overflow-hidden rounded-full bg-sunken">
+                {/* 进度条：按已移动数量填充（细条 + accent，macOS 质感） */}
+                <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-sunken">
                   <div
-                    className="h-full rounded-full bg-emerald-500 transition-all"
+                    className="h-full rounded-full bg-accent transition-all"
                     style={{
                       width: moveProgress
                         ? `${Math.round((moveProgress.current / moveProgress.total) * 100)}%`
@@ -419,14 +424,14 @@ export default function PlanPreview({
               <>
                 {result.ok ? (
                   <>
-                    <p className="inline-flex items-center gap-2 text-ink">
-                      <CheckCircle2 size={18} className="text-emerald-500" />
+                    <p className="inline-flex items-center gap-2 tabular-nums text-ink">
+                      <CheckCircle2 size={18} className="text-success" />
                       已整理 {result.moved} 个文件
                     </p>
                     {/* 部分文件失败时列出原因 */}
                     {result.errors.length > 0 && (
-                      <div className="mt-3 max-h-40 overflow-y-auto rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-400/10 dark:text-red-300">
-                        <p className="mb-1">以下 {result.errors.length} 个文件未能移动：</p>
+                      <div className="mt-3 max-h-40 overflow-y-auto rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">
+                        <p className="mb-1 tabular-nums">以下 {result.errors.length} 个文件未能移动：</p>
                         <ul className="space-y-0.5">
                           {result.errors.map((e) => (
                             <li key={e.name}>
@@ -438,7 +443,7 @@ export default function PlanPreview({
                     )}
                   </>
                 ) : (
-                  <p className="text-red-700 dark:text-red-300">整理失败：{result.error}</p>
+                  <p className="text-danger">整理失败：{result.error}</p>
                 )}
                 <div className="mt-5 flex justify-end">
                   <button

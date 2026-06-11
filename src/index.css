@@ -14,34 +14,56 @@
   --color-ink: var(--ink);           /* 主文字 */
   --color-ink-2: var(--ink-2);       /* 次级文字 */
   --color-ink-3: var(--ink-3);       /* 弱化文字/占位符 */
-  --color-accent: var(--accent);     /* 主操作色（indigo 系） */
+  --color-accent: var(--accent);     /* 主操作色（苹果蓝） */
   --color-accent-hi: var(--accent-hi); /* 主操作色 hover */
+  /* 状态色：前景单 token，弱化形态用透明度修饰符（bg-success/10 等），不写 dark: 变体 */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  /* 阴影分级：card=卡片/约束栏，raised=提示条，modal=弹窗 */
+  --shadow-card: var(--shadow-1);
+  --shadow-raised: var(--shadow-2);
+  --shadow-modal: var(--shadow-3);
 }
 
-/* 亮色主题（默认变量）：Apple 系配色——苹果蓝 accent、发丝级半透明边框 */
+/* 亮色主题（默认变量）：Apple 系配色——苹果蓝 accent、发丝级半透明边框。
+   层级约定（两套主题一致）：canvas < sunken < surface（由"低"到"浮起"） */
 :root {
   --canvas: #f5f5f7;
   --surface: #ffffff;
-  --sunken: #f0f0f2;
-  --line: rgba(0, 0, 0, 0.08);
+  --sunken: #ececef;
+  --line: rgba(0, 0, 0, 0.07);
   --ink: #1d1d1f;
   --ink-2: #515154;
   --ink-3: #86868b;
   --accent: #0071e3;
   --accent-hi: #0077ed;
+  --success: #1d8a45;
+  --warning: #c04d00;
+  --danger: #d70015;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 1px rgba(0, 0, 0, 0.03);
+  --shadow-2: 0 2px 6px rgba(0, 0, 0, 0.06), 0 8px 24px -8px rgba(0, 0, 0, 0.10);
+  --shadow-3: 0 8px 24px rgba(0, 0, 0, 0.12), 0 32px 64px -16px rgba(0, 0, 0, 0.22);
 }
 
-/* 暗色主题：macOS 暗色系统色（图标的深灰底银色粒子环同气质） */
+/* 暗色主题：近黑底、surface 靠亮度差+阴影浮起（深邃版，2026-06 升级）。
+   注意 sunken 必须介于 canvas 和 surface 之间——之前 sunken 比 surface 亮是层级倒置，勿改回 */
 .dark {
-  --canvas: #161617;
-  --surface: #1d1d1f;
-  --sunken: #2c2c2e;
-  --line: rgba(255, 255, 255, 0.1);
+  --canvas: #0e0e10;
+  --surface: #1b1b1f;
+  --sunken: #141417;
+  --line: rgba(255, 255, 255, 0.08);
   --ink: #f5f5f7;
   --ink-2: #a1a1a6;
   --ink-3: #6e6e73;
   --accent: #0a84ff;
-  --accent-hi: #409cff;
+  --accent-hi: #3b9bff;
+  --success: #30d158;
+  --warning: #ff9f0a;
+  --danger: #ff6961;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-2: 0 2px 8px rgba(0, 0, 0, 0.50), 0 10px 28px -8px rgba(0, 0, 0, 0.55);
+  --shadow-3: 0 10px 28px rgba(0, 0, 0, 0.55), 0 40px 80px -20px rgba(0, 0, 0, 0.75);
 }
 
 /* 背景色随主题切换时平滑过渡；字体走 Apple 系统栈（无 SF 的平台回退苹方/鸿蒙黑/雅黑） */
@@ -84,4 +106,47 @@ body {
 }
 @utility animate-pop-in {
   animation: pop-in 0.18s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+}
+
+/* ===== 无边框窗口 =====
+   header 即标题栏：整体可拖拽移动窗口，交互元素必须套 app-no-drag 否则点不到 */
+@utility app-drag {
+  -webkit-app-region: drag;
+}
+@utility app-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* ===== 自定义滚动条 =====
+   默认 Chrome 滚动条在桌面应用里很出戏；透明轨道 + 细圆角 thumb（padding-box 留出呼吸边） */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.22);
+  border-radius: 5px;
+  border: 2.5px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.38);
+}
+.dark ::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.18);
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.32);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* 键盘可达性：仅键盘聚焦时显示 accent 环（鼠标点击不触发） */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }

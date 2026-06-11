@@ -5,6 +5,24 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('api', {
+  // 平台标识：渲染进程据此决定标题栏布局（mac 给原生红绿灯留白 / 其他平台自绘窗口控制按钮）
+  platform: process.platform,
+
+  // 无边框窗口的控制接口（对应 main.js 的 window:* IPC）
+  win: {
+    minimize: () => ipcRenderer.send('window:minimize'),
+    maximizeToggle: () => ipcRenderer.send('window:maximize-toggle'),
+    close: () => ipcRenderer.send('window:close'),
+    // 查询初始最大化状态，返回 { ok, maximized }
+    isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
+    // 订阅最大化状态变化（true/false），返回取消订阅函数
+    onMaximizedChange: (callback) => {
+      const listener = (_event, maximized) => callback(maximized)
+      ipcRenderer.on('window:maximized-changed', listener)
+      return () => ipcRenderer.removeListener('window:maximized-changed', listener)
+    },
+  },
+
   // 让主进程弹出文件夹选择对话框并返回文件列表
   // 对应 main.js 中的 ipcMain.handle('select-folder')
   selectFolder: () => ipcRenderer.invoke('select-folder'),

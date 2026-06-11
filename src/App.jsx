@@ -20,6 +20,12 @@ import FileTable from './components/FileTable'
 import ApiKeyModal from './components/ApiKeyModal'
 import PlanPreview from './components/PlanPreview'
 import HistoryModal from './components/HistoryModal'
+import WindowControls from './components/WindowControls'
+
+// 平台标识在应用生命周期内不变，模块级取一次即可。
+// 无边框窗口下 header 即标题栏：mac 给原生红绿灯留白，其他平台渲染自绘控制按钮
+const isMac = window.api.platform === 'darwin'
+const isLinux = window.api.platform === 'linux'
 
 // 主题持久化 key：'dark' | 'light'，默认暗色（与应用图标气质一致）
 const THEME_KEY = 'ui-theme'
@@ -295,18 +301,33 @@ export default function App() {
     }
   }
 
+  // 仅 Linux 需要 JS 兜底双击标题栏最大化（mac/Windows 由系统原生处理，再绑会双重切换）；
+  // 双击落在按钮/输入框等交互元素上时不触发
+  function handleTitlebarDoubleClick(e) {
+    if (e.target.closest('button, input, a')) return
+    window.api.win.maximizeToggle()
+  }
+
   return (
     <div className="min-h-screen bg-canvas text-ink transition-colors">
-      {/* 毛玻璃顶栏：sticky 通栏，内容滚动时从玻璃下穿过（macOS 质感的关键） */}
-      <header className="sticky top-0 z-40 border-b border-line bg-canvas/70 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-8 py-3">
+      {/* 毛玻璃顶栏 = 无边框窗口的标题栏：app-drag 整体可拖拽移动窗口，
+          交互元素套 app-no-drag；sticky 通栏，内容滚动时从玻璃下穿过（macOS 质感的关键） */}
+      <header
+        onDoubleClick={isLinux ? handleTitlebarDoubleClick : undefined}
+        className="app-drag sticky top-0 z-40 border-b border-line bg-canvas/70 backdrop-blur-xl"
+      >
+        <div
+          className={`flex h-13 items-center justify-between gap-4 ${
+            isMac ? 'pl-20 pr-5' : 'pl-5 pr-[150px]'
+          }`}
+        >
           {/* min-w-0 + truncate：空间不足时标题截断，绝不挤压右侧按钮 */}
-          <h1 className="flex min-w-0 items-center gap-2.5 text-lg font-semibold text-ink">
-            <FolderOpen size={22} className="shrink-0 text-accent" />
+          <h1 className="flex min-w-0 select-none items-center gap-2.5 text-[15px] font-semibold text-ink">
+            <FolderOpen size={20} className="shrink-0 text-accent" />
             <span className="truncate">holy_sexy_folder_management</span>
           </h1>
           {/* 按钮全部 nowrap：宁可标题截断，也不能让按钮文字竖排 */}
-          <div className="flex shrink-0 gap-2 whitespace-nowrap">
+          <div className="app-no-drag flex shrink-0 gap-2 whitespace-nowrap">
             {/* 撤销按钮：只在有可撤销记录时显示，悬停可见上次整理的文件夹和时间 */}
             {undoable?.undoable && (
               <button
@@ -315,7 +336,7 @@ export default function App() {
                 title={`上次整理：${undoable.info.folderPath}（${new Date(
                   undoable.info.createdAt,
                 ).toLocaleString()}，${undoable.info.moveCount} 个文件）`}
-                className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100 active:scale-[0.98] disabled:opacity-50 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300 dark:hover:bg-amber-400/20"
+                className="inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 px-4 py-2 text-sm font-medium tabular-nums text-warning transition hover:bg-warning/20 active:scale-[0.98] disabled:opacity-50"
               >
                 <Undo2 size={15} />
                 {undoing
@@ -343,7 +364,7 @@ export default function App() {
                   ? '所有条目都被约束开关跳过，没有可分析的文件'
                   : undefined
               }
-              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 active:scale-[0.98] disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-medium tabular-nums text-white transition hover:bg-accent-hi active:scale-[0.98] disabled:opacity-50"
             >
               {analyzing ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
               {analyzing
@@ -355,7 +376,7 @@ export default function App() {
             <button
               onClick={handleSelectFolder}
               disabled={loading}
-              className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-hi active:scale-[0.98] disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:bg-sunken active:scale-[0.98] disabled:opacity-50"
             >
               <FolderSearch size={15} />
               {loading ? '读取中…' : '选择文件夹'}
@@ -378,6 +399,8 @@ export default function App() {
             </button>
           </div>
         </div>
+        {/* 非 mac：自绘窗口控制按钮（api.win 存在性兜底：preload 未更新的旧会话不渲染） */}
+        {!isMac && window.api.win && <WindowControls />}
       </header>
 
       {/* 主内容区 */}
@@ -386,7 +409,7 @@ export default function App() {
         {folderPath && (
           <div
             title={constraintsLocked ? '分析中或预览打开时不可修改，返回文件列表后再调整' : undefined}
-            className={`mb-4 flex flex-wrap items-center gap-x-6 gap-y-2.5 rounded-2xl border border-line bg-surface px-4 py-3 text-sm text-ink-2 transition ${
+            className={`mb-4 flex flex-wrap items-center gap-x-6 gap-y-2.5 rounded-xl border border-line bg-surface px-4 py-3 text-sm text-ink-2 shadow-card transition ${
               constraintsLocked ? 'opacity-60' : ''
             }`}
           >
@@ -426,14 +449,14 @@ export default function App() {
             </label>
             {/* 实时统计被跳过的条目数 */}
             {skippedEntries.length > 0 && (
-              <span className="text-xs text-ink-3">已跳过 {skippedEntries.length} 项</span>
+              <span className="text-xs tabular-nums text-ink-3">已跳过 {skippedEntries.length} 项</span>
             )}
           </div>
         )}
 
         {/* 未配置密钥时的引导提示 */}
         {keyStatus && !keyStatus.configured && (
-          <p className="mb-4 animate-fade-in rounded-xl bg-amber-50 px-4 py-2.5 text-sm text-amber-700 dark:bg-amber-400/10 dark:text-amber-300">
+          <p className="mb-4 animate-fade-in rounded-xl bg-warning/10 px-4 py-2.5 text-sm text-warning shadow-raised">
             尚未设置 API Key，「分析」功能需要先在
             <button onClick={() => setShowSettings(true)} className="mx-1 underline">
               设置
@@ -445,10 +468,8 @@ export default function App() {
         {/* 分析结果提示条：成功为绿色，失败为红色；撤销后留有空分类文件夹时附清理按钮 */}
         {analyzeStatus && (
           <p
-            className={`mb-4 animate-fade-in rounded-xl px-4 py-2.5 text-sm ${
-              analyzeStatus.ok
-                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300'
-                : 'bg-red-50 text-red-700 dark:bg-red-400/10 dark:text-red-300'
+            className={`mb-4 animate-fade-in rounded-xl px-4 py-2.5 text-sm shadow-raised ${
+              analyzeStatus.ok ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'
             }`}
           >
             {analyzeStatus.message}
@@ -471,7 +492,7 @@ export default function App() {
             {/* 当前路径和条目统计 */}
             <p className="mb-3 text-sm text-ink-3">
               <span className="font-medium text-ink-2">{folderPath}</span>
-              <span className="ml-2">共 {files.length} 项（仅第一层）</span>
+              <span className="ml-2 tabular-nums">共 {files.length} 项（仅第一层）</span>
             </p>
             {/* 有整理方案时显示预览界面，否则显示原始文件列表 */}
             {plans ? (
@@ -489,10 +510,17 @@ export default function App() {
             )}
           </>
         ) : (
-          /* 空状态：还没有选择文件夹时的提示 */
-          <div className="flex animate-fade-in flex-col items-center gap-3 rounded-xl border-2 border-dashed border-line py-24 text-center text-ink-3">
-            <FolderOpen size={40} className="text-ink-3/60" />
-            点击右上角「选择文件夹」按钮，查看文件夹内容
+          /* 空状态：图标方块 + 标题/描述两级文字（虚线框显得临时，已弃用） */
+          <div className="flex animate-fade-in flex-col items-center gap-5 py-28 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-line bg-surface shadow-card">
+              <FolderOpen size={28} className="text-ink-3" />
+            </div>
+            <div>
+              <p className="text-base font-medium text-ink">选择一个文件夹开始</p>
+              <p className="mt-1.5 text-sm text-ink-3">
+                AI 会为第一层文件生成三套分类方案，确认后才会移动文件
+              </p>
+            </div>
           </div>
         )}
       </div>
@@ -505,7 +533,7 @@ export default function App() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm animate-pop-in rounded-2xl border border-line bg-surface p-6 shadow-xl"
+            className="w-full max-w-sm animate-pop-in rounded-2xl border border-line bg-surface p-6 shadow-modal"
           >
             <p className="text-ink">
               文件较多（{eligibleFiles.length} 个），AI
@@ -523,7 +551,7 @@ export default function App() {
                   setConfirmLarge(false)
                   doAnalyze()
                 }}
-                className="rounded-full bg-emerald-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 active:scale-[0.98]"
+                className="rounded-full bg-accent px-5 py-2 text-sm font-medium text-white transition hover:bg-accent-hi active:scale-[0.98]"
               >
                 仍要继续
               </button>

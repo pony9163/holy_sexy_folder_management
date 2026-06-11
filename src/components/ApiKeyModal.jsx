@@ -86,7 +86,7 @@ export default function ApiKeyModal({ onClose, onStatusChange }) {
     >
       {/* 弹窗主体，阻止冒泡避免误关 */}
       <div
-        className="w-full max-w-md animate-pop-in rounded-2xl border border-line bg-surface p-6 shadow-xl"
+        className="w-full max-w-md animate-pop-in rounded-2xl border border-line bg-surface p-6 shadow-modal"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="mb-4 inline-flex items-center gap-2 text-lg font-bold text-ink">
@@ -102,7 +102,7 @@ export default function ApiKeyModal({ onClose, onStatusChange }) {
             <>
               当前密钥：<span className="font-mono text-ink">{status.maskedKey}</span>
               {!status.persisted && (
-                <span className="ml-2 text-amber-600 dark:text-amber-300">（仅本次运行有效）</span>
+                <span className="ml-2 text-warning">（仅本次运行有效）</span>
               )}
             </>
           ) : (
@@ -110,7 +110,7 @@ export default function ApiKeyModal({ onClose, onStatusChange }) {
           )}
           {/* Linux 弱加密后端提示 */}
           {status?.weakBackend && (
-            <p className="mt-1 inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-300">
+            <p className="mt-1 inline-flex items-center gap-1 text-xs text-warning">
               <TriangleAlert size={12} />
               当前系统未启用密钥环（gnome-keyring/kwallet），存储加密强度较弱
             </p>
@@ -141,9 +141,7 @@ export default function ApiKeyModal({ onClose, onStatusChange }) {
         {message && (
           <p
             className={`mb-4 animate-fade-in rounded-lg px-3 py-2 text-sm ${
-              message.ok
-                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300'
-                : 'bg-red-50 text-red-700 dark:bg-red-400/10 dark:text-red-300'
+              message.ok ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'
             }`}
           >
             {message.text}
@@ -170,7 +168,7 @@ export default function ApiKeyModal({ onClose, onStatusChange }) {
             <button
               onClick={handleDelete}
               disabled={busy}
-              className="rounded-lg border border-red-200 px-4 py-2 text-sm text-red-600 transition hover:bg-red-50 active:scale-[0.98] disabled:opacity-50 dark:border-red-400/30 dark:text-red-300 dark:hover:bg-red-400/10"
+              className="rounded-lg border border-danger/30 px-4 py-2 text-sm text-danger transition hover:bg-danger/10 active:scale-[0.98] disabled:opacity-50"
             >
               删除密钥
             </button>

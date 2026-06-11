@@ -43,12 +43,20 @@ const passedRootCheck = ensureNotRoot()
  * 创建主窗口
  */
 function createWindow() {
+  // 无边框窗口：mac 用 hiddenInset 隐藏标题栏但保留原生红绿灯；
+  // 其他平台完全去框，窗口控制按钮由渲染进程自绘（WindowControls 组件）。
+  // 已知限制：Linux 上无 CSD 的窗口由合成器决定外观——直角、无投影属预期（VS Code 同此），
+  // 不要用 transparent: true 兜底（会禁用部分硬件加速、部分 WM 下边缘 resize 失效）。
+  // 逃生舱：某个 WM 下出问题时 HSF_NATIVE_FRAME=1 启动即可退回系统原生边框。
+  const isMac = process.platform === 'darwin'
+  const nativeFrame = process.env.HSF_NATIVE_FRAME === '1'
   const win = new BrowserWindow({
     width: 900,
     height: 680,
     title: 'holy_sexy_folder_management',
-    backgroundColor: '#17181c', // 与默认暗色主题的 --canvas 一致，避免启动白闪
+    backgroundColor: '#0e0e10', // 与默认暗色主题的 --canvas 一致（index.css 改动需同步此处），避免启动白闪
     show: false, // 渲染就绪后再显示，配合 backgroundColor 消除闪烁
+    ...(nativeFrame ? {} : isMac ? { titleBarStyle: 'hiddenInset' } : { frame: false }),
     webPreferences: {
       // preload 脚本：在隔离环境中向页面注入 window.api
       preload: path.join(__dirname, 'preload.js'),
@@ -60,6 +68,12 @@ function createWindow() {
 
   win.once('ready-to-show', () => win.show())
 
+  // 最大化状态推送：渲染进程的 WindowControls 据此切换 最大化/还原 图标
+  const pushMaxState = () =>
+    win.webContents.send('window:maximized-changed', win.isMaximized())
+  win.on('maximize', pushMaxState)
+  win.on('unmaximize', pushMaxState)
+
   if (app.isPackaged) {
     // 生产环境：加载 Vite 构建产物
     win.loadFile(path.join(__dirname, '../dist/index.html'))
@@ -68,6 +82,25 @@ function createWindow() {
     win.loadURL('http://localhost:5173')
   }
 }
+
+// ===== 窗口控制 IPC（无边框窗口的自绘按钮，仅非 mac 平台的渲染进程会调用）=====
+// 三个控制是 fire-and-forget 的单向消息（ipcMain.on 无返回值；{ok} 约定只针对 handle）
+ipcMain.on('window:minimize', (e) => BrowserWindow.fromWebContents(e.sender)?.minimize())
+ipcMain.on('window:maximize-toggle', (e) => {
+  const win = BrowserWindow.fromWebContents(e.sender)
+  if (!win) return
+  if (win.isMaximized()) {
+    win.unmaximize()
+  } else {
+    win.maximize()
+  }
+})
+ipcMain.on('window:close', (e) => BrowserWindow.fromWebContents(e.sender)?.close())
+// 初始最大化状态（渲染进程挂载时查一次，后续变化走 window:maximized-changed 推送）
+ipcMain.handle('window:is-maximized', (e) => ({
+  ok: true,
+  maximized: BrowserWindow.fromWebContents(e.sender)?.isMaximized() ?? false,
+}))
 
 /**
  * 根据文件名取「类型」展示文本：
