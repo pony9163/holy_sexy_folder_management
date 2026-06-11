@@ -32,6 +32,9 @@ function extOf(name) {
   return i > 0 ? name.slice(i + 1).toLowerCase() : ''
 }
 
+// 参与分析的文件数超过该值时先弹确认框（输出 JSON 过长可能变慢或截断）
+const LARGE_FILE_THRESHOLD = 300
+
 export default function App() {
   const [folderPath, setFolderPath] = useState(null) // 当前选中的文件夹路径
   const [files, setFiles] = useState([])             // 第一层文件/文件夹列表
@@ -47,6 +50,7 @@ export default function App() {
   const [undoProgress, setUndoProgress] = useState(null) // 撤销进度 { current, total }
   const [showHistory, setShowHistory] = useState(false)  // 是否打开整理历史弹窗
   const [constraints, setConstraints] = useState(loadConstraints) // 分析前的约束开关
+  const [confirmLarge, setConfirmLarge] = useState(false) // 文件数超阈值的分析确认框
 
   // 约束变更即写回 localStorage
   useEffect(() => {
@@ -121,8 +125,17 @@ export default function App() {
     }
   }
 
-  // 点击「分析」：把文件清单发给主进程 → Kimi API → 返回分类方案
-  async function handleAnalyze() {
+  // 点击「分析」：文件数超阈值先弹确认框，否则直接分析
+  function handleAnalyze() {
+    if (eligibleFiles.length > LARGE_FILE_THRESHOLD) {
+      setConfirmLarge(true)
+    } else {
+      doAnalyze()
+    }
+  }
+
+  // 真正执行分析：把文件清单发给主进程 → Kimi API → 返回分类方案
+  async function doAnalyze() {
     setAnalyzing(true)
     setAnalyzeStatus(null)
     setProgress(0)
@@ -374,6 +387,41 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {/* 文件数量保护确认框：参与分析的文件超过阈值时让用户知情后再继续 */}
+      {confirmLarge && (
+        <div
+          onClick={() => setConfirmLarge(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl"
+          >
+            <p className="text-gray-800">
+              文件较多（{eligibleFiles.length} 个），AI
+              分析可能不完整或较慢，建议先勾选约束条件减少范围，或分批整理。仍要继续吗？
+            </p>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmLarge(false)}
+                className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-gray-700 shadow-sm transition hover:bg-gray-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => {
+                  setConfirmLarge(false)
+                  doAnalyze()
+                }}
+                className="rounded-lg bg-emerald-600 px-5 py-2.5 font-medium text-white shadow transition hover:bg-emerald-700"
+              >
+                仍要继续
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 整理历史弹窗 */}
       {showHistory && (

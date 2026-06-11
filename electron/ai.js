@@ -234,7 +234,9 @@ async function analyzeFiles(files, onProgress) {
   try {
     plans = parsePlans(text)
   } catch (err) {
-    throw new Error(`无法解析 Kimi 返回的 JSON：${err.message}`)
+    // 文件多时输出 JSON 很长，截断是解析失败的常见原因（阈值与前端确认框一致）
+    const hint = files.length > 300 ? '；文件数量过多可能导致方案生成不完整，请减少文件后重试' : ''
+    throw new Error(`无法解析 Kimi 返回的 JSON：${err.message}${hint}`)
   }
   return fillMissingFiles(plans, files)
 }
