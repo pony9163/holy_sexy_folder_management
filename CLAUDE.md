@@ -92,6 +92,7 @@ src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（elec
 - 模型是 `deepseek-v4-flash`（官方主 ID；`deepseek-chat`/`deepseek-reasoner` 是兼容别名，2026-07-24 弃用，别用），`temperature: 0.3`；系统提示词作为 `messages` 第一条（`role: 'system'`）。**该模型思考模式默认开启**，`streamCompletion` 里显式传 `thinking: { type: 'disabled' }` 关闭（openai SDK 透传未知参数）——2026-06 实测关闭后首字 token 秒级、整体快于之前的 moonshot-v1-auto；删掉这行会慢到思考型模型的 ≈30s 量级（生成用不到的推理过程），与之前弃用 kimi 思考型模型是同一个教训
 - 调用是流式的（`stream: true`，共用 `streamCompletion`）：`analyzeFiles(files, onProgress)` 边接收边回调字符数，main.js 经 `analyze-progress` 事件推给渲染进程显示进度
 - 分析的系统提示词要求一次返回恰好三套思路不同的方案，严格 JSON（`{ plans: [{ name, folders: [{ name, files, reason }] }] }`）；`parsePlans` 剥掉模型偶尔包的 ```json 栅栏再 parse，校验 plans/folders 结构，方案名缺失或重复时回退「方案一/二/三」（前端 Tab 的 key 是方案名，必须唯一）
+- **分类名禁含路径分隔符**：deepseek-v4-flash 爱起「图片/截图」式分类名，会被 main.js 的 `isSafeName` 安全卡口整单拒绝。分析和对话调整两个提示词都已加约束（并列含义用顿号）；卡口报错会指明肇事名字（分类名/空分类/文件名三种分开报）。提示词只能挡大部分——若实际仍频发，下一步是在 parsePlans/adjustPlan 解析后清洗分类名（替换 `/` `\` 为全角），别去松动 isSafeName 本身
 - **每套方案必须独立覆盖全部文件**（三套是三选一的备选项，不是把文件分摊到三套里）：提示词已强调，但模型偶尔仍漏个别文件，`fillMissingFiles` 在分析后把每套未覆盖的文件归入「其他」兜底分类。对话调整**故意不做**这个兜底——用户可能就是要求把某些文件从方案里去掉
 - `adjustPlan({ files, plan, history }, onProgress)`：按用户自然语言要求改写一套方案，返回 `{ reply, folders, raw }`；history 里 assistant 消息发上一轮的 `raw` 原始 JSON（让模型看到自己的输出），进度走独立的 `adjust-progress`
 - `testApiKey` 用 `client.models.list()` 验证密钥——零 token 成本，改动时别换成会计费的接口（它测新 key，不走 getClient 缓存）

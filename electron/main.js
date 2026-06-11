@@ -246,13 +246,22 @@ ipcMain.handle('organize:run', async (event, payload) => {
     const groups = Array.isArray(payload?.groups) ? payload.groups : null
     if (!groups || groups.length === 0) return { ok: false, error: '没有可整理的文件' }
     for (const group of groups) {
-      if (
-        !isSafeName(group?.folderName) ||
-        !Array.isArray(group?.fileNames) ||
-        group.fileNames.length === 0 ||
-        !group.fileNames.every(isSafeName)
-      ) {
-        return { ok: false, error: '整理方案包含非法名称，已拒绝执行' }
+      // 分开校验并指明肇事名字：分类名是 AI 自由生成的（如带 / 的「图片/截图」），最容易踩中
+      if (!isSafeName(group?.folderName)) {
+        return {
+          ok: false,
+          error: `整理方案包含非法分类名「${String(group?.folderName ?? '')}」（不能含路径分隔符或为 . / ..），已拒绝执行`,
+        }
+      }
+      if (!Array.isArray(group?.fileNames) || group.fileNames.length === 0) {
+        return { ok: false, error: `分类「${group.folderName}」没有文件，已拒绝执行` }
+      }
+      const badFile = group.fileNames.find((n) => !isSafeName(n))
+      if (badFile !== undefined) {
+        return {
+          ok: false,
+          error: `分类「${group.folderName}」中包含非法文件名「${String(badFile ?? '')}」，已拒绝执行`,
+        }
       }
     }
     // ===== 检查结束，执行整理 =====
