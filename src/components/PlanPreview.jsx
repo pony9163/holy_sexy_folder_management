@@ -81,6 +81,7 @@ export default function PlanPreview({
   const [chatInput, setChatInput] = useState('')        // 聊天输入框内容
   const [adjusting, setAdjusting] = useState(false)     // 是否正在请求 AI 调整
   const [adjustProgress, setAdjustProgress] = useState(0) // 调整流式输出已接收字符数
+  const [adjustSeconds, setAdjustSeconds] = useState(0)  // 调整已等待秒数（首响应前的反馈）
   const [adjustError, setAdjustError] = useState(null)  // 调整失败的错误信息
   const chatBottomRef = useRef(null) // 聊天列表底部锚点，用于新消息后自动滚到底
 
@@ -89,6 +90,14 @@ export default function PlanPreview({
 
   // 订阅调整进度（独立于分析进度的 channel，避免和 App 的分析按钮串台）
   useEffect(() => window.api.onAdjustProgress(setAdjustProgress), [])
+
+  // 调整期间每秒计时：首响应到达前气泡显示已等待秒数，让用户知道没卡死
+  useEffect(() => {
+    if (!adjusting) return
+    setAdjustSeconds(0)
+    const timer = setInterval(() => setAdjustSeconds((s) => s + 1), 1000)
+    return () => clearInterval(timer)
+  }, [adjusting])
 
   // 新消息或进入调整中状态时，把聊天列表滚到底部
   useEffect(() => {
@@ -288,7 +297,9 @@ export default function PlanPreview({
           {adjusting && (
             <div className="flex justify-start">
               <p className="max-w-[80%] rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-500">
-                {adjustProgress > 0 ? `调整中…已接收 ${adjustProgress} 字` : '调整中…'}
+                {adjustProgress > 0
+                  ? `调整中…已接收 ${adjustProgress} 字`
+                  : `等待 Kimi 响应…${adjustSeconds}s`}
               </p>
             </div>
           )}

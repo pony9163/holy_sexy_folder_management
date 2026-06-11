@@ -41,6 +41,7 @@ export default function App() {
   const [loading, setLoading] = useState(false)      // 是否正在读取文件夹
   const [analyzing, setAnalyzing] = useState(false)  // 是否正在调用 Kimi 分析
   const [progress, setProgress] = useState(0)        // 流式输出已接收的字符数（仅分析中有意义）
+  const [analyzeSeconds, setAnalyzeSeconds] = useState(0) // 分析已等待秒数（首响应前的反馈）
   const [analyzeStatus, setAnalyzeStatus] = useState(null) // 分析结果提示 { ok, message }
   const [showSettings, setShowSettings] = useState(false)  // 是否打开 API Key 设置弹窗
   const [keyStatus, setKeyStatus] = useState(null)   // 密钥状态（只含掩码等元信息）
@@ -95,6 +96,14 @@ export default function App() {
 
   // 订阅分析进度事件（主进程流式接收 Kimi 回复时持续推送），卸载时取消订阅
   useEffect(() => window.api.onAnalyzeProgress(setProgress), [])
+
+  // 分析期间每秒计时：首响应到达前（progress 为 0）按钮显示已等待秒数，让用户知道没卡死
+  useEffect(() => {
+    if (!analyzing) return
+    setAnalyzeSeconds(0)
+    const timer = setInterval(() => setAnalyzeSeconds((s) => s + 1), 1000)
+    return () => clearInterval(timer)
+  }, [analyzing])
 
   // 订阅撤销进度事件（主进程每移回一个文件推送一次）
   useEffect(() => window.api.organize.onUndoProgress(setUndoProgress), [])
@@ -262,7 +271,11 @@ export default function App() {
               }
               className="rounded-lg bg-emerald-600 px-5 py-2.5 font-medium text-white shadow transition hover:bg-emerald-700 disabled:opacity-50"
             >
-              {analyzing ? (progress > 0 ? `分析中…已接收 ${progress} 字` : '分析中…') : '✨ 分析'}
+              {analyzing
+                ? progress > 0
+                  ? `分析中…已接收 ${progress} 字`
+                  : `等待 Kimi 响应…${analyzeSeconds}s`
+                : '✨ 分析'}
             </button>
             <button
               onClick={handleSelectFolder}

@@ -115,6 +115,20 @@ function resolveApiKey() {
   return key
 }
 
+// 缓存 OpenAI client：复用连接池（keep-alive）省去每次调用的 TCP/TLS 握手，
+// 降低首响应延迟；用户更换密钥后 key 不匹配自动重建
+let cachedClient = null
+let cachedKey = null
+
+function getClient() {
+  const key = resolveApiKey()
+  if (!cachedClient || cachedKey !== key) {
+    cachedClient = new OpenAI({ apiKey: key, baseURL: BASE_URL })
+    cachedKey = key
+  }
+  return cachedClient
+}
+
 /**
  * 把 SDK 的类型化异常翻译成对用户友好的中文 Error。
  */
@@ -164,7 +178,7 @@ async function testApiKey(rawKey) {
  * analyzeFiles 和 adjustPlan 共用，失败时抛出翻译后的中文 Error。
  */
 async function streamCompletion(messages, onProgress) {
-  const client = new OpenAI({ apiKey: resolveApiKey(), baseURL: BASE_URL })
+  const client = getClient()
 
   let text = ''
   try {
