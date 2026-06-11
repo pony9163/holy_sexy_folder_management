@@ -3,11 +3,34 @@
 // - 选中文件夹后：显示当前路径、条目数和文件列表表格
 // - 点「分析」：把文件清单发给 Kimi 生成分类方案，结果以预览卡片展示（可排除文件后确认）
 // - ⚙️ 设置：填写/管理 Moonshot API Key（加密存储在主进程侧）
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import FileTable from './components/FileTable'
 import ApiKeyModal from './components/ApiKeyModal'
 import PlanPreview from './components/PlanPreview'
 import HistoryModal from './components/HistoryModal'
+
+// 约束开关的持久化 key 与默认值（跨会话记住用户习惯）
+const CONSTRAINTS_KEY = 'organize-constraints-v1'
+const DEFAULT_CONSTRAINTS = {
+  skipDirs: true,           // 不整理已有文件夹（默认开启）
+  skipRecent: false,        // 不动最近 7 天修改的文件
+  excludeExtsEnabled: false, // 是否启用按扩展名排除
+  excludeExts: '',          // 逗号分隔的扩展名，如 "exe,dmg"
+}
+
+function loadConstraints() {
+  try {
+    return { ...DEFAULT_CONSTRAINTS, ...JSON.parse(localStorage.getItem(CONSTRAINTS_KEY)) }
+  } catch {
+    return DEFAULT_CONSTRAINTS
+  }
+}
+
+// 取小写扩展名（无扩展名或 dotfile 如 .bashrc 返回空串，空串不会命中排除集合）
+function extOf(name) {
+  const i = name.lastIndexOf('.')
+  return i > 0 ? name.slice(i + 1).toLowerCase() : ''
+}
 
 export default function App() {
   const [folderPath, setFolderPath] = useState(null) // 当前选中的文件夹路径
@@ -23,6 +46,43 @@ export default function App() {
   const [undoing, setUndoing] = useState(false)       // 是否正在撤销
   const [undoProgress, setUndoProgress] = useState(null) // 撤销进度 { current, total }
   const [showHistory, setShowHistory] = useState(false)  // 是否打开整理历史弹窗
+  const [constraints, setConstraints] = useState(loadConstraints) // 分析前的约束开关
+
+  // 约束变更即写回 localStorage
+  useEffect(() => {
+    localStorage.setItem(CONSTRAINTS_KEY, JSON.stringify(constraints))
+  }, [constraints])
+
+  // 按约束开关把条目分成「参与整理」和「跳过」两组：
+  // 跳过的不发给 AI、不进方案、永远不会被移动；预览里灰色列出跳过原因
+  const { eligibleFiles, skippedEntries } = useMemo(() => {
+    const excludeSet = new Set(
+      constraints.excludeExtsEnabled
+        ? constraints.excludeExts
+            .split(',')
+            .map((s) => s.trim().replace(/^\./, '').toLowerCase())
+            .filter(Boolean)
+        : [],
+    )
+    const recentLimit = Date.now() - 7 * 24 * 3600 * 1000
+    const eligible = []
+    const skipped = []
+    for (const f of files) {
+      if (constraints.skipDirs && f.isDirectory) {
+        skipped.push({ name: f.name, reason: '已有文件夹，不参与整理' })
+      } else if (constraints.skipRecent && f.mtime >= recentLimit) {
+        skipped.push({ name: f.name, reason: '最近 7 天有修改，已跳过' })
+      } else if (!f.isDirectory && excludeSet.has(extOf(f.name))) {
+        skipped.push({ name: f.name, reason: `类型已排除（${extOf(f.name)}），已跳过` })
+      } else {
+        eligible.push(f)
+      }
+    }
+    return { eligibleFiles: eligible, skippedEntries: skipped }
+  }, [files, constraints])
+
+  // 分析中或预览打开时锁定约束开关，避免方案与约束不一致
+  const constraintsLocked = analyzing || plans !== null
 
   // 启动时查一次密钥状态，用于在界面上给出引导提示
   useEffect(() => {
@@ -68,7 +128,7 @@ export default function App() {
     setProgress(0)
     setPlans(null) // 先卸载旧预览，重新分析后排除状态从零开始
     try {
-      const result = await window.api.analyzeFiles(files)
+      const result = await window.api.analyzeFiles(eligibleFiles)
       if (result.ok) {
         // 主进程返回多套思路不同的方案，直接交给 PlanPreview 按 Tab 渲染
         setPlans(result.plans)
@@ -178,10 +238,15 @@ export default function App() {
             >
               📜 整理历史
             </button>
-            {/* 分析按钮：选了文件夹且列表非空才可点 */}
+            {/* 分析按钮：选了文件夹且约束过滤后仍有条目才可点 */}
             <button
               onClick={handleAnalyze}
-              disabled={analyzing || files.length === 0}
+              disabled={analyzing || eligibleFiles.length === 0}
+              title={
+                files.length > 0 && eligibleFiles.length === 0
+                  ? '所有条目都被约束开关跳过，没有可分析的文件'
+                  : undefined
+              }
               className="rounded-lg bg-emerald-600 px-5 py-2.5 font-medium text-white shadow transition hover:bg-emerald-700 disabled:opacity-50"
             >
               {analyzing ? (progress > 0 ? `分析中…已接收 ${progress} 字` : '分析中…') : '✨ 分析'}
@@ -203,6 +268,58 @@ export default function App() {
             </button>
           </div>
         </header>
+
+        {/* 约束开关栏：分析前声明哪些条目不参与整理（分析中/预览打开时锁定） */}
+        {folderPath && (
+          <div
+            title={constraintsLocked ? '分析中或预览打开时不可修改，返回文件列表后再调整' : undefined}
+            className={`mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-700 shadow-sm ${
+              constraintsLocked ? 'opacity-60' : ''
+            }`}
+          >
+            <label className="flex cursor-pointer items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={constraints.skipDirs}
+                disabled={constraintsLocked}
+                onChange={(e) => setConstraints((c) => ({ ...c, skipDirs: e.target.checked }))}
+              />
+              不整理已有文件夹
+            </label>
+            <label className="flex cursor-pointer items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={constraints.skipRecent}
+                disabled={constraintsLocked}
+                onChange={(e) => setConstraints((c) => ({ ...c, skipRecent: e.target.checked }))}
+              />
+              不动最近 7 天修改的文件
+            </label>
+            <label className="flex cursor-pointer items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={constraints.excludeExtsEnabled}
+                disabled={constraintsLocked}
+                onChange={(e) =>
+                  setConstraints((c) => ({ ...c, excludeExtsEnabled: e.target.checked }))
+                }
+              />
+              排除文件类型
+              <input
+                type="text"
+                value={constraints.excludeExts}
+                disabled={constraintsLocked || !constraints.excludeExtsEnabled}
+                onChange={(e) => setConstraints((c) => ({ ...c, excludeExts: e.target.value }))}
+                placeholder="如 exe,dmg"
+                className="w-28 rounded border border-gray-300 px-2 py-1 text-xs outline-none transition focus:border-blue-400 disabled:bg-gray-100"
+              />
+            </label>
+            {/* 实时统计被跳过的条目数 */}
+            {skippedEntries.length > 0 && (
+              <span className="text-xs text-gray-400">已跳过 {skippedEntries.length} 项</span>
+            )}
+          </div>
+        )}
 
         {/* 未配置密钥时的引导提示 */}
         {keyStatus && !keyStatus.configured && (
@@ -239,7 +356,9 @@ export default function App() {
             {plans ? (
               <PlanPreview
                 plans={plans}
-                files={files}
+                files={eligibleFiles}
+                skipped={skippedEntries}
+                allowDirs={!constraints.skipDirs}
                 folderPath={folderPath}
                 onCancel={() => setPlans(null)}
                 onOrganized={handleOrganized}

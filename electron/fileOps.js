@@ -119,13 +119,16 @@ function translateFsError(err) {
  * @param {Array<{folderName: string, fileNames: string[]}>} groups 分类方案（名字已经过主进程校验）
  * @param {string} logDir 映射表存放目录（userData 下）
  * @param {(current: number, total: number) => void} [onProgress] 每移动一个文件回调一次
+ * @param {{allowDirs?: boolean}} [options] allowDirs=true 时允许移动文件夹
+ *   （来自前端「不整理已有文件夹」约束开关的显式放行）；默认 false 维持拒绝移动文件夹的安全行为
  * @returns {Promise<{moved: number, total: number, errors: Array<{name, error}>}>}
  *
  * 单文件失败策略：跳过并记录，不中止——每次移动相互独立，
  * 「恢复」统一交给显式撤销；映射表逐条标记 done/failed，
  * 部分失败不破坏撤销的正确性。
  */
-async function organize(folderPath, groups, logDir, onProgress) {
+async function organize(folderPath, groups, logDir, onProgress, options = {}) {
+  const allowDirs = options.allowDirs === true
   const errors = []
   const createdFolders = []
   const moves = []
@@ -163,8 +166,14 @@ async function organize(folderPath, groups, logDir, onProgress) {
         errors.push({ name, error: '文件已不存在，跳过' })
         continue
       }
-      if (fileStat.isDirectory()) {
+      if (fileStat.isDirectory() && !allowDirs) {
         errors.push({ name, error: '是文件夹，不参与整理' })
+        continue
+      }
+      if (fileStat.isDirectory() && path.resolve(from) === path.resolve(targetDir)) {
+        // 分类名与被移动文件夹同名：移动等于把文件夹塞进它自身，明确拒绝
+        //（更深的嵌套情况由 OS 的 rename 报错，走下面的 errors 流程）
+        errors.push({ name, error: '不能把文件夹移入它自身' })
         continue
       }
       // 目标位置已有同名文件时加 (1)、(2)…

@@ -35,7 +35,8 @@ contextBridge.exposeInMainWorld('api', {
 
   // 文件整理（移动 + 撤销），对应 main.js 中的 organize:* handler
   organize: {
-    // 执行整理：{ folderPath, groups: [{ folderName, fileNames }] }
+    // 执行整理：{ folderPath, groups: [{ folderName, fileNames }], allowDirs }
+    // allowDirs=true 时允许移动文件夹（「不整理已有文件夹」开关关闭的显式放行）
     run: (payload) => ipcRenderer.invoke('organize:run', payload),
     // 撤销最近一次整理
     undo: () => ipcRenderer.invoke('organize:undo'),

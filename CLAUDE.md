@@ -70,6 +70,7 @@ src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（elec
 - **渲染进程输入不可信**：organize:run 对 folderPath 先 `fs.realpath`（防符号链接绕过黑名单）再查安全；所有分类名/文件名校验 `path.basename(x) === x` 且非 `.`/`..`；organize:restore 的 logFileName 三重校验（纯文件名 + 严格正则 + resolve 后确认在 logDir 内）
 - 路径拼接一律 `path.join`/`path.resolve`，不手写分隔符；root 检查双保险（启动时 `ensureNotRoot` 弹窗退出 + organize/undo handler 内再拦一道）
 - 目标重名自动加 ` (1)`、` (2)`…（`uniqueName`，rename 前还会复核一次防 POSIX rename 静默覆盖）；单文件失败跳过记录不中止，恢复统一交给显式撤销
+- **organize 默认拒绝移动文件夹**（"是文件夹，不参与整理"）；`options.allowDirs === true` 为显式放行（来自前端「不整理已有文件夹」开关关闭，organize:run 透传并强制布尔化），放行时仍拒绝「分类名==被移动文件夹名」的自吞移动，更深嵌套由 OS rename 报错兜底
 - **顺序回滚语义**（restoreTo）：恢复到第 N 次之前 = 同 folderPath（字符串严格相等即可，落盘前已 realpath 规范化，勿对历史路径再 realpath——目录可能已不存在）、createdAt >= 目标、未撤销的记录按时间倒序逐份撤销；其他文件夹不受影响
 
 ### API 密钥安全不变量（改动相关代码时必须维持）
@@ -102,6 +103,7 @@ src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（elec
 - Tailwind v4 走 `@tailwindcss/vite` 插件：**没有也不需要** `tailwind.config.js`/PostCSS 配置，入口只有 `src/index.css` 的 `@import "tailwindcss"`
 - `vite.config.js` 的 `base: './'` 是生产模式 `file://` 加载 dist 所必需的，别删
 - 文件列表排序规则在 `FileTable.jsx`：文件夹在前，组内 `localeCompare(name, 'zh')`；文件夹的大小列显示 `—`
+- 约束开关栏在 `App.jsx`：三个开关（不整理已有文件夹默认开/不动最近 7 天/排除扩展名），状态持久化到 localStorage（`organize-constraints-v1`）；App 用 useMemo 把 files 分成 `eligibleFiles`（发给 AI、传给 PlanPreview）和 `skippedEntries`（预览灰色区展示）；分析中或预览打开时整栏锁定，防止方案与约束不一致；PlanPreview 的 `resolvedFolders` 只认 fileMap 成员（不再特判 isDirectory，目录参与与否由 App 过滤决定）
 - `PlanPreview.jsx`：三套方案按 Tab 切换，方案数组提升为本地 state `localPlans`（对话调整会改写当前方案的 folders；App 重新分析前先 setPlans(null) 卸载组件，故用 props 初始化安全）；排除集合和聊天历史都按方案独立（`plans.map(() => …)` 模式）；聊天调整成功后替换当前方案 folders 并**清空该方案的排除集合**（文件归属已变）；整理弹窗为三态状态机 confirm → running → done，发给主进程的 groups 由 `resolvedFolders` 过滤排除项得出（AI 幻觉文件名靠它的 fileMap 过滤兜底）
 - `HistoryModal.jsx`：历史快照弹窗，四阶段（列表/confirm/running/done）；"连带撤销 N 次"的链条由前端用 `getHistory` 返回的摘要自行计算（同 folderPath、createdAt >= 目标、未撤销），与主进程 `restoreTo` 的链条定义保持一致——改一边必须同步另一边
 - 整理/撤销/恢复完成后的列表刷新都走 handler 返回的 `files`（撤销/恢复要先比对返回的 `folderPath` 是否等于当前展示的文件夹）

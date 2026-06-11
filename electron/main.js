@@ -219,9 +219,16 @@ ipcMain.handle('organize:run', async (event, payload) => {
       }
     }
     // ===== 检查结束，执行整理 =====
-    const result = await fileOps.organize(folderPath, groups, organizeLogDir(), (current, total) => {
-      event.sender.send('organize:progress', { current, total })
-    })
+    // allowDirs 来自前端「不整理已有文件夹」开关的显式放行，强制布尔化（默认拒绝移动文件夹）
+    const result = await fileOps.organize(
+      folderPath,
+      groups,
+      organizeLogDir(),
+      (current, total) => {
+        event.sender.send('organize:progress', { current, total })
+      },
+      { allowDirs: payload?.allowDirs === true },
+    )
     // 附带刷新后的文件列表，前端免二次往返
     const files = await readFolderEntries(folderPath)
     return { ok: true, ...result, files }

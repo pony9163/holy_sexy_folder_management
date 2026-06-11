@@ -3,7 +3,7 @@
 // - 每个方案用卡片树展示：每个新文件夹一张卡片，列出将移入的文件和 AI 给的 reason
 // - 每个文件可"排除/恢复"，排除状态按方案独立保存
 // - 聊天面板：用自然语言让 AI 改写当前选中的方案，对话历史按方案独立保存
-// - 已有子文件夹不参与整理，单独显示为底部灰色提示行
+// - 被约束开关跳过的条目（已有文件夹/最近修改/排除类型）显示为底部灰色提示区
 // - "确认整理"：弹窗确认 → 调主进程真正移动文件（显示进度）→ 显示"已整理 XX 个文件"
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { formatSize } from '../utils/format'
@@ -22,18 +22,20 @@ function FolderCard({ folder, fileMap, excludedSet, onToggle }) {
       </div>
       {/* AI 给出的分类理由 */}
       <p className="px-4 py-2 text-sm text-gray-500">{folder.reason}</p>
-      {/* 将移入该文件夹的文件列表 */}
+      {/* 将移入该文件夹的条目列表（约束放行时可能含整个文件夹） */}
       <ul className="divide-y divide-gray-100">
         {folder.validNames.map((name) => {
           const excluded = excludedSet.has(name)
+          const entry = fileMap.get(name)
           return (
             <li key={name} className="flex items-center justify-between px-4 py-2.5 text-sm">
               <span className={excluded ? 'text-gray-400 line-through' : 'text-gray-800'}>
-                <span className="mr-2">📄</span>
+                <span className="mr-2">{entry.isDirectory ? '📁' : '📄'}</span>
                 {name}
               </span>
               <span className="flex items-center gap-3">
-                <span className="text-gray-400">{formatSize(fileMap.get(name).size)}</span>
+                {/* 文件夹的大小列与 FileTable 一致显示 — */}
+                <span className="text-gray-400">{entry.isDirectory ? '—' : formatSize(entry.size)}</span>
                 {/* 排除/恢复开关：误点可挽回 */}
                 <button
                   onClick={() => onToggle(name)}
@@ -54,7 +56,15 @@ function FolderCard({ folder, fileMap, excludedSet, onToggle }) {
   )
 }
 
-export default function PlanPreview({ plans, files, folderPath, onCancel, onOrganized }) {
+export default function PlanPreview({
+  plans,
+  files, // 已经过 App 约束过滤的「参与整理」条目（skipDirs 关闭时可能含文件夹）
+  skipped = [], // 被约束跳过的条目 [{ name, reason }]，仅灰色展示
+  allowDirs = false, // 是否允许移动文件夹（「不整理已有文件夹」关闭时为 true）
+  folderPath,
+  onCancel,
+  onOrganized,
+}) {
   // 方案数组提升为本地 state：对话调整会改写当前方案的 folders
   //（App 每次重新分析前会先 setPlans(null) 卸载本组件，用 props 初始化是安全的）
   const [localPlans, setLocalPlans] = useState(plans)
@@ -88,18 +98,14 @@ export default function PlanPreview({ plans, files, folderPath, onCancel, onOrga
   // 文件名 → 文件对象索引，用于校验 AI 返回的文件名并取 size/isDirectory
   const fileMap = useMemo(() => new Map(files.map((f) => [f.name, f])), [files])
 
-  // 已有子文件夹：不参与整理，只在底部灰条里提示
-  const existingDirs = useMemo(() => files.filter((f) => f.isDirectory), [files])
-
-  // 当前方案的卡片数据：过滤掉 AI 幻觉的文件名和已有子文件夹，无有效文件的卡片整张剔除
+  // 当前方案的卡片数据：过滤掉 AI 幻觉/被约束跳过的名字（都不在 fileMap 里），
+  // 无有效文件的卡片整张剔除；目录是否参与由 App 的约束过滤决定，这里不再特判
   const resolvedFolders = useMemo(
     () =>
       localPlans[activeIndex].folders
         .map((folder) => ({
           ...folder,
-          validNames: folder.files.filter(
-            (name) => fileMap.has(name) && !fileMap.get(name).isDirectory,
-          ),
+          validNames: folder.files.filter((name) => fileMap.has(name)),
         }))
         .filter((folder) => folder.validNames.length > 0),
     [localPlans, activeIndex, fileMap],
@@ -200,7 +206,8 @@ export default function PlanPreview({ plans, files, folderPath, onCancel, onOrga
         fileNames: folder.validNames.filter((name) => !excluded[activeIndex].has(name)),
       }))
       .filter((group) => group.fileNames.length > 0)
-    const res = await window.api.organize.run({ folderPath, groups })
+    // allowDirs：「不整理已有文件夹」关闭时显式放行移动文件夹（主进程默认拒绝）
+    const res = await window.api.organize.run({ folderPath, groups, allowDirs })
     setResult(res)
     setPhase('done')
   }
@@ -240,11 +247,18 @@ export default function PlanPreview({ plans, files, folderPath, onCancel, onOrga
         ))}
       </div>
 
-      {/* 已有子文件夹提示：不出现在任何方案卡片里 */}
-      {existingDirs.length > 0 && (
-        <p className="mt-4 rounded-lg bg-gray-100 px-4 py-2.5 text-sm text-gray-500">
-          📁 已有文件夹不参与整理：{existingDirs.map((d) => d.name).join('、')}
-        </p>
+      {/* 被约束跳过的条目：灰色列出名字和原因，不出现在任何方案卡片里 */}
+      {skipped.length > 0 && (
+        <div className="mt-4 max-h-40 overflow-y-auto rounded-lg bg-gray-100 px-4 py-2.5 text-sm text-gray-500">
+          <p className="mb-1">以下 {skipped.length} 项按约束跳过，不参与整理：</p>
+          <ul className="space-y-0.5">
+            {skipped.map((s) => (
+              <li key={s.name}>
+                {s.name} —— {s.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {/* 聊天面板：用自然语言让 AI 改写当前选中的方案 */}
