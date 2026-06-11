@@ -69,7 +69,7 @@ export default function App() {
       <div className="mx-auto max-w-4xl">
         {/* 标题栏与操作按钮 */}
         <header className="mb-6 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-800">📂 TidyFolder</h1>
+          <h1 className="text-2xl font-bold text-gray-800">📂 holy_sexy_folder_management</h1>
           <div className="flex gap-3">
             {/* 分析按钮：选了文件夹且列表非空才可点 */}
             <button

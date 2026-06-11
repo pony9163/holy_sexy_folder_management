@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概况
 
-TidyFolder——Electron + React 18 + Tailwind CSS v4 桌面应用：选择文件夹后列出其**第一层**条目（设计上不递归），并可调用 Kimi API（Moonshot）生成文件分类方案。实际项目在 `tidyfolder/` 子目录，所有命令都在那里执行。代码注释统一用中文，新代码保持此约定。
+holy_sexy_folder_management——Electron + React 18 + Tailwind CSS v4 桌面应用：选择文件夹后列出其**第一层**条目（设计上不递归），并可调用 Kimi API（Moonshot）生成文件分类方案。实际项目在 `tidyfolder/` 子目录，所有命令都在那里执行。代码注释统一用中文，新代码保持此约定。
 
 ## 常用命令
 
@@ -21,7 +21,7 @@ npm start        # 以生产模式启动（加载 dist/，需先 build）
 - 主进程代码改动后 `node --check electron/<file>.js`（CJS 语法检查）
 - 前端改动后 `npm run build` 确认可编译
 - `keyStore.js` 依赖 `app`/`safeStorage`，**只能在 Electron 环境测试**：写临时入口脚本用 `npx electron /tmp/test.js` 跑（先 `app.setPath('userData', 临时目录)` 避免污染真实数据）
-- 端到端实测 API 调用：临时脚本里 `app.setPath('userData', '~/.config/tidyfolder')` 指向真实目录，即可用已保存的密钥直接调 `analyzeFiles`（只读密钥、**绝不打印**；脚本里 require 项目内模块和 `node_modules/openai` 要用绝对路径，因为脚本在 /tmp）
+- 端到端实测 API 调用：临时脚本里 `app.setPath('userData', '~/.config/holy_sexy_folder_management')` 指向真实目录，即可用已保存的密钥直接调 `analyzeFiles`（只读密钥、**绝不打印**；脚本里 require 项目内模块和 `node_modules/openai` 要用绝对路径，因为脚本在 /tmp）
 - 无头环境跑 `npm run dev` 时终端的 GetVSyncParameters GL 报错是无害的
 
 ## 架构

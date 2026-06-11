@@ -1,4 +1,4 @@
-# 📂 TidyFolder
+# 📂 holy_sexy_folder_management
 
 一个用 **Electron + React + Tailwind CSS** 构建的桌面小工具：选择一个文件夹，列出其**第一层**所有文件和子文件夹的名称、类型、大小和修改日期（不递归进入子文件夹），并可调用 **Claude API** 生成智能分类方案。
 

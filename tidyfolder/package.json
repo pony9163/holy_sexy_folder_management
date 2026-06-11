@@ -1,7 +1,7 @@
 {
-  "name": "tidyfolder",
+  "name": "holy_sexy_folder_management",
   "version": "0.0.1",
-  "description": "TidyFolder —— 选择一个文件夹，查看其第一层文件的名称、类型、大小和修改日期",
+  "description": "holy_sexy_folder_management —— 选择一个文件夹，查看其第一层文件的名称、类型、大小和修改日期",
   "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",

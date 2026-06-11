@@ -18,7 +18,7 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 900,
     height: 680,
-    title: 'TidyFolder',
+    title: 'holy_sexy_folder_management',
     webPreferences: {
       // preload 脚本：在隔离环境中向页面注入 window.api
       preload: path.join(__dirname, 'preload.js'),
