@@ -8,7 +8,7 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs/promises')
-const { analyzeFiles, testApiKey } = require('./ai')
+const { analyzeFiles, adjustPlan, testApiKey } = require('./ai')
 const keyStore = require('./keyStore')
 const fileOps = require('./fileOps')
 
@@ -123,19 +123,38 @@ ipcMain.handle('select-folder', async () => {
 
 // IPC handler：渲染进程调用 window.api.analyzeFiles(files) 时触发
 // 把文件清单发给 Kimi 做智能分类，返回：
-// - 成功 → { ok: true, plan: { folders: [...] } }
+// - 成功 → { ok: true, plans: [ { name, folders: [...] } ] }（三套思路不同的方案）
 // - 失败 → { ok: false, error: 中文错误信息 }（不让异常裸穿 IPC）
 ipcMain.handle('analyze-files', async (event, files) => {
   try {
     // 流式接收：每收到一段就把已接收字符数推给渲染进程，供界面显示进度
-    const plan = await analyzeFiles(files, (received) => {
+    const plans = await analyzeFiles(files, (received) => {
       event.sender.send('analyze-progress', received)
     })
     // 在主进程终端也打印一份，方便在 npm run dev 的终端里直接观察结果
-    console.log('Kimi 分类方案:', JSON.stringify(plan, null, 2))
-    return { ok: true, plan }
+    console.log('Kimi 分类方案:', JSON.stringify(plans, null, 2))
+    return { ok: true, plans }
   } catch (err) {
     console.error('分析失败:', err.message)
+    return { ok: false, error: err.message }
+  }
+})
+
+// IPC handler：渲染进程调用 window.api.adjustPlan(payload) 时触发
+// 按用户的自然语言要求调整当前方案（只生成新方案 JSON，不动任何文件），返回：
+// - 成功 → { ok: true, reply, folders, raw }
+// - 失败 → { ok: false, error: 中文错误信息 }
+// 进度走独立的 adjust-progress channel（分析进度订阅在 App，调整进度订阅在 PlanPreview，
+// 复用 analyze-progress 会让两处状态串台）
+ipcMain.handle('adjust-plan', async (event, payload) => {
+  try {
+    const result = await adjustPlan(payload, (received) => {
+      event.sender.send('adjust-progress', received)
+    })
+    console.log('Kimi 调整后方案:', JSON.stringify(result.folders, null, 2))
+    return { ok: true, ...result }
+  } catch (err) {
+    console.error('调整失败:', err.message)
     return { ok: false, error: err.message }
   }
 })

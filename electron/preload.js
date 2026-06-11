@@ -21,6 +21,18 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('analyze-progress', listener)
   },
 
+  // 按用户对话要求调整方案：{ files, plan, history }
+  // 对应 main.js 中的 ipcMain.handle('adjust-plan')
+  adjustPlan: (payload) => ipcRenderer.invoke('adjust-plan', payload),
+
+  // 订阅调整进度（流式输出已接收的字符数），返回取消订阅函数
+  // 独立于 analyze-progress，避免和分析按钮的进度状态串台
+  onAdjustProgress: (callback) => {
+    const listener = (_event, received) => callback(received)
+    ipcRenderer.on('adjust-progress', listener)
+    return () => ipcRenderer.removeListener('adjust-progress', listener)
+  },
+
   // 文件整理（移动 + 撤销），对应 main.js 中的 organize:* handler
   organize: {
     // 执行整理：{ folderPath, groups: [{ folderName, fileNames }] }

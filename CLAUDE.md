@@ -40,7 +40,8 @@ npm run dist     # vite build + electron-builder 打 Linux deb → release/
 ```
 src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（electron/main.js）
   ├─ select-folder           → dialog + readFolderEntries（fs.readdir withFileTypes，仅第一层）
-  ├─ analyze-files           → electron/ai.js（Kimi API 流式调用）
+  ├─ analyze-files           → electron/ai.js analyzeFiles（一次返回三套方案）
+  ├─ adjust-plan             → electron/ai.js adjustPlan（对话调整当前方案，只生成 JSON 不动文件）
   ├─ organize:run            → electron/fileOps.js organize（创建分类文件夹 + fs.rename 移动）
   ├─ organize:undo           → fileOps undoOrganize（撤销最近一次未撤销的整理）
   ├─ organize:get-undoable   → fileOps findLatestUndoable（撤销按钮显隐）
@@ -50,11 +51,12 @@ src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（elec
 
 反向推送（主进程 → 渲染进程）均为「订阅函数返回取消订阅函数」模式（参考 onAnalyzeProgress）：
   analyze-progress           —— 分析期间推送已接收字符数（number）
+  adjust-progress            —— 对话调整期间推送已接收字符数（number）
   organize:progress          —— 整理移动进度 { current, total }
   organize:undo-progress     —— 撤销进度 { current, total }
   organize:restore-progress  —— 历史恢复进度 { current, total }
-  进度 channel 故意分开不复用：App 全局订阅 undo-progress 驱动撤销按钮文案，
-  HistoryModal 订阅 restore-progress，复用会状态串台
+  进度 channel 故意分开不复用：App 订阅 analyze-progress/undo-progress，
+  PlanPreview 订阅 adjust-progress，HistoryModal 订阅 restore-progress，复用会状态串台
 ```
 
 约定：IPC handler 一律返回 `{ ok: true, ... }` 或 `{ ok: false, error: 中文消息 }`，异常不裸穿 IPC；用户可见的错误信息全部是中文。`organize:run`/`organize:undo` 返回值附带刷新后的 `files` 列表（`organize:restore` 在目录可读时附带），前端直接 setFiles 免二次往返。
@@ -81,8 +83,9 @@ src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（elec
 
 - 用 `openai` SDK 走 Moonshot 的 OpenAI 兼容接口：`new OpenAI({ apiKey, baseURL: 'https://api.moonshot.cn/v1' })`
 - 模型是 `moonshot-v1-auto`，`temperature: 0.3`；系统提示词作为 `messages` 第一条（`role: 'system'`）。**不要换回 kimi-k2.6 / k2.5**：它们是思考型模型，同样任务 ≈30s（v1-auto ≈4s），且 k2.6 只接受 temperature=1
-- 调用是流式的（`stream: true`）：`analyzeFiles(files, onProgress)` 边接收边回调字符数，main.js 经 `analyze-progress` 事件推给渲染进程显示进度
-- 系统提示词要求严格 JSON（`{ folders: [{ name, files, reason }] }`）；`parsePlan` 会剥掉模型偶尔包的 ```json 栅栏再 parse，并校验 `folders` 是数组
+- 调用是流式的（`stream: true`，共用 `streamCompletion`）：`analyzeFiles(files, onProgress)` 边接收边回调字符数，main.js 经 `analyze-progress` 事件推给渲染进程显示进度
+- 分析的系统提示词要求一次返回恰好三套思路不同的方案，严格 JSON（`{ plans: [{ name, folders: [{ name, files, reason }] }] }`）；`parsePlans` 剥掉模型偶尔包的 ```json 栅栏再 parse，校验 plans/folders 结构，方案名缺失或重复时回退「方案一/二/三」（前端 Tab 的 key 是方案名，必须唯一）
+- `adjustPlan({ files, plan, history }, onProgress)`：按用户自然语言要求改写一套方案，返回 `{ reply, folders, raw }`；history 里 assistant 消息发上一轮的 `raw` 原始 JSON（让模型看到自己的输出），进度走独立的 `adjust-progress`
 - `testApiKey` 用 `client.models.list()` 验证密钥——零 token 成本，改动时别换成会计费的接口
 - SDK 错误统一经 `translateError` 翻译成中文（用类型化异常 `instanceof`，不要字符串匹配）
 
@@ -98,6 +101,6 @@ src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（elec
 - Tailwind v4 走 `@tailwindcss/vite` 插件：**没有也不需要** `tailwind.config.js`/PostCSS 配置，入口只有 `src/index.css` 的 `@import "tailwindcss"`
 - `vite.config.js` 的 `base: './'` 是生产模式 `file://` 加载 dist 所必需的，别删
 - 文件列表排序规则在 `FileTable.jsx`：文件夹在前，组内 `localeCompare(name, 'zh')`；文件夹的大小列显示 `—`
-- `PlanPreview.jsx`：方案按数组渲染（多方案 Tab 预留），每方案独立排除集合 `excluded = plans.map(() => new Set())`；整理弹窗为三态状态机 confirm → running → done，发给主进程的 groups 由 `resolvedFolders` 过滤排除项得出
+- `PlanPreview.jsx`：三套方案按 Tab 切换，方案数组提升为本地 state `localPlans`（对话调整会改写当前方案的 folders；App 重新分析前先 setPlans(null) 卸载组件，故用 props 初始化安全）；排除集合和聊天历史都按方案独立（`plans.map(() => …)` 模式）；聊天调整成功后替换当前方案 folders 并**清空该方案的排除集合**（文件归属已变）；整理弹窗为三态状态机 confirm → running → done，发给主进程的 groups 由 `resolvedFolders` 过滤排除项得出（AI 幻觉文件名靠它的 fileMap 过滤兜底）
 - `HistoryModal.jsx`：历史快照弹窗，四阶段（列表/confirm/running/done）；"连带撤销 N 次"的链条由前端用 `getHistory` 返回的摘要自行计算（同 folderPath、createdAt >= 目标、未撤销），与主进程 `restoreTo` 的链条定义保持一致——改一边必须同步另一边
 - 整理/撤销/恢复完成后的列表刷新都走 handler 返回的 `files`（撤销/恢复要先比对返回的 `folderPath` 是否等于当前展示的文件夹）

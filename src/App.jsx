@@ -70,9 +70,9 @@ export default function App() {
     try {
       const result = await window.api.analyzeFiles(files)
       if (result.ok) {
-        // 按"方案数组"包装，为未来多套方案预留结构（当前 AI 只返回一套）
-        setPlans([{ name: '方案一', folders: result.plan.folders }])
-        setAnalyzeStatus({ ok: true, message: `分析完成：共 ${result.plan.folders.length} 个分类，请在下方预览确认` })
+        // 主进程返回多套思路不同的方案，直接交给 PlanPreview 按 Tab 渲染
+        setPlans(result.plans)
+        setAnalyzeStatus({ ok: true, message: `分析完成：生成 ${result.plans.length} 套方案，请在下方切换预览` })
       } else {
         setAnalyzeStatus({ ok: false, message: result.error })
       }

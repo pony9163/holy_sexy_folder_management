@@ -1,10 +1,11 @@
 // 整理预览界面：
-// - 顶部一排方案 Tab（数据结构是"方案数组"，为未来多套方案预留；当前 AI 只返回一套）
+// - 顶部一排方案 Tab：AI 一次返回三套思路不同的方案，点 Tab 切换
 // - 每个方案用卡片树展示：每个新文件夹一张卡片，列出将移入的文件和 AI 给的 reason
 // - 每个文件可"排除/恢复"，排除状态按方案独立保存
+// - 聊天面板：用自然语言让 AI 改写当前选中的方案，对话历史按方案独立保存
 // - 已有子文件夹不参与整理，单独显示为底部灰色提示行
 // - "确认整理"：弹窗确认 → 调主进程真正移动文件（显示进度）→ 显示"已整理 XX 个文件"
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { formatSize } from '../utils/format'
 
 // 单个方案卡片：一个新文件夹 + 其下将移入的文件列表
@@ -54,16 +55,35 @@ function FolderCard({ folder, fileMap, excludedSet, onToggle }) {
 }
 
 export default function PlanPreview({ plans, files, folderPath, onCancel, onOrganized }) {
+  // 方案数组提升为本地 state：对话调整会改写当前方案的 folders
+  //（App 每次重新分析前会先 setPlans(null) 卸载本组件，用 props 初始化是安全的）
+  const [localPlans, setLocalPlans] = useState(plans)
   const [activeIndex, setActiveIndex] = useState(0) // 当前选中的方案 Tab
-  // 每个方案各自的排除集合（下标与 plans 对齐）：Set<文件名>
+  // 每个方案各自的排除集合（下标与方案对齐）：Set<文件名>
   const [excluded, setExcluded] = useState(() => plans.map(() => new Set()))
   // 整理弹窗的阶段：null（关闭）→ confirm（待确认）→ running（移动中）→ done（完成）
   const [phase, setPhase] = useState(null)
   const [moveProgress, setMoveProgress] = useState(null) // { current, total }
   const [result, setResult] = useState(null) // organize:run 的返回值
+  // 每个方案各自的对话历史：[{ role: 'user'|'assistant', content: 展示文本, raw?: 原始 JSON }]
+  // assistant 消息的 raw 是模型上一轮的原始回复，发历史时用它让模型看到自己的输出
+  const [chats, setChats] = useState(() => plans.map(() => []))
+  const [chatInput, setChatInput] = useState('')        // 聊天输入框内容
+  const [adjusting, setAdjusting] = useState(false)     // 是否正在请求 AI 调整
+  const [adjustProgress, setAdjustProgress] = useState(0) // 调整流式输出已接收字符数
+  const [adjustError, setAdjustError] = useState(null)  // 调整失败的错误信息
+  const chatBottomRef = useRef(null) // 聊天列表底部锚点，用于新消息后自动滚到底
 
   // 订阅移动进度（主进程每移动一个文件推送一次），卸载时取消订阅
   useEffect(() => window.api.organize.onProgress(setMoveProgress), [])
+
+  // 订阅调整进度（独立于分析进度的 channel，避免和 App 的分析按钮串台）
+  useEffect(() => window.api.onAdjustProgress(setAdjustProgress), [])
+
+  // 新消息或进入调整中状态时，把聊天列表滚到底部
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chats, adjusting])
 
   // 文件名 → 文件对象索引，用于校验 AI 返回的文件名并取 size/isDirectory
   const fileMap = useMemo(() => new Map(files.map((f) => [f.name, f])), [files])
@@ -74,7 +94,7 @@ export default function PlanPreview({ plans, files, folderPath, onCancel, onOrga
   // 当前方案的卡片数据：过滤掉 AI 幻觉的文件名和已有子文件夹，无有效文件的卡片整张剔除
   const resolvedFolders = useMemo(
     () =>
-      plans[activeIndex].folders
+      localPlans[activeIndex].folders
         .map((folder) => ({
           ...folder,
           validNames: folder.files.filter(
@@ -82,7 +102,7 @@ export default function PlanPreview({ plans, files, folderPath, onCancel, onOrga
           ),
         }))
         .filter((folder) => folder.validNames.length > 0),
-    [plans, activeIndex, fileMap],
+    [localPlans, activeIndex, fileMap],
   )
 
   // 将移动的文件数 = 当前方案有效文件中未被排除的数量
@@ -112,6 +132,51 @@ export default function PlanPreview({ plans, files, folderPath, onCancel, onOrga
     )
   }
 
+  // 发送聊天消息：让 AI 按要求改写当前选中的方案
+  async function handleSendChat(e) {
+    e.preventDefault()
+    const message = chatInput.trim()
+    if (!message || adjusting) return
+
+    // 先把用户消息上屏（只追加到当前方案的历史）
+    const userMsg = { role: 'user', content: message }
+    setChats((prev) => prev.map((list, i) => (i === activeIndex ? [...list, userMsg] : list)))
+    setChatInput('')
+    setAdjusting(true)
+    setAdjustProgress(0)
+    setAdjustError(null)
+    try {
+      // 历史里 assistant 消息发 raw（模型上一轮的原始 JSON），user 消息发原文
+      const history = [...chats[activeIndex], userMsg].map((m) => ({
+        role: m.role,
+        content: m.role === 'assistant' ? m.raw : m.content,
+      }))
+      const res = await window.api.adjustPlan({
+        files,
+        plan: localPlans[activeIndex].folders,
+        history,
+      })
+      if (res.ok) {
+        // 用调整后的 folders 替换当前方案（其他方案不动）
+        setLocalPlans((prev) =>
+          prev.map((plan, i) => (i === activeIndex ? { ...plan, folders: res.folders } : plan)),
+        )
+        // 文件归属已变，当前方案的旧排除集合语义失效，清空
+        setExcluded((prev) => prev.map((set, i) => (i === activeIndex ? new Set() : set)))
+        // AI 回复上屏（content 展示 reply，raw 留给下一轮历史）
+        setChats((prev) =>
+          prev.map((list, i) =>
+            i === activeIndex ? [...list, { role: 'assistant', content: res.reply, raw: res.raw }] : list,
+          ),
+        )
+      } else {
+        setAdjustError(res.error)
+      }
+    } finally {
+      setAdjusting(false)
+    }
+  }
+
   // 点击弹窗里的"开始整理"：把当前方案（去掉被排除的文件）发给主进程执行移动
   async function handleOrganize() {
     setPhase('running')
@@ -130,12 +195,15 @@ export default function PlanPreview({ plans, files, folderPath, onCancel, onOrga
 
   return (
     <div>
-      {/* 方案切换 Tab：当前只有一套方案，但按数组渲染、支持多个 */}
+      {/* 方案切换 Tab：三套思路不同的方案，排除/聊天状态按方案独立 */}
       <div className="mb-4 flex gap-2">
-        {plans.map((plan, i) => (
+        {localPlans.map((plan, i) => (
           <button
             key={plan.name}
-            onClick={() => setActiveIndex(i)}
+            onClick={() => {
+              setActiveIndex(i)
+              setAdjustError(null) // 错误提示只属于发消息时的方案，切 Tab 即清
+            }}
             className={`rounded-lg px-4 py-2 text-sm transition ${
               i === activeIndex
                 ? 'bg-blue-600 font-medium text-white'
@@ -166,6 +234,60 @@ export default function PlanPreview({ plans, files, folderPath, onCancel, onOrga
           📁 已有文件夹不参与整理：{existingDirs.map((d) => d.name).join('、')}
         </p>
       )}
+
+      {/* 聊天面板：用自然语言让 AI 改写当前选中的方案 */}
+      <div className="mt-4 rounded-lg border border-gray-200 bg-white shadow-sm">
+        <p className="border-b border-gray-100 bg-gray-50 px-4 py-2.5 text-sm font-medium text-gray-700">
+          💬 对「{localPlans[activeIndex].name}」提调整要求
+        </p>
+        {/* 消息列表：用户右侧蓝、AI 左侧灰；为空时显示引导文案 */}
+        <div className="max-h-64 space-y-2 overflow-y-auto px-4 py-3">
+          {chats[activeIndex].length === 0 && !adjusting && (
+            <p className="text-sm text-gray-400">
+              例如："把截图和照片合并成一个分类"、"新建一个叫 2024 报销 的分类"
+            </p>
+          )}
+          {chats[activeIndex].map((msg, i) => (
+            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <p
+                className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
+                  msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-800'
+                }`}
+              >
+                {msg.content}
+              </p>
+            </div>
+          ))}
+          {/* 调整中提示：流式接收进度 */}
+          {adjusting && (
+            <div className="flex justify-start">
+              <p className="max-w-[80%] rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-500">
+                {adjustProgress > 0 ? `调整中…已接收 ${adjustProgress} 字` : '调整中…'}
+              </p>
+            </div>
+          )}
+          {/* 调整失败：面板内显示错误行，不打断已有对话 */}
+          {adjustError && <p className="text-sm text-red-600">调整失败：{adjustError}</p>}
+          <div ref={chatBottomRef} />
+        </div>
+        {/* 输入区：调整中禁用 */}
+        <form onSubmit={handleSendChat} className="flex gap-2 border-t border-gray-100 px-4 py-3">
+          <input
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            disabled={adjusting}
+            placeholder="告诉 AI 你想怎么调整当前方案…"
+            className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-blue-400 disabled:bg-gray-50"
+          />
+          <button
+            type="submit"
+            disabled={adjusting || chatInput.trim() === ''}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-700 disabled:opacity-50"
+          >
+            发送
+          </button>
+        </form>
+      </div>
 
       {/* 底部操作按钮 */}
       <div className="mt-4 flex justify-end gap-3">
