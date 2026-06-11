@@ -47,6 +47,7 @@ src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（elec
   ├─ organize:get-undoable   → fileOps findLatestUndoable（撤销按钮显隐）
   ├─ organize:history        → fileOps listHistory（历史弹窗的快照摘要列表）
   ├─ organize:restore        → fileOps restoreTo（顺序回滚到某次整理之前）
+  ├─ organize:clean-folders  → fileOps cleanEmptyCreatedFolders（删撤销后留下的空分类文件夹）
   └─ api-key:*               → electron/keyStore.js（密钥存取）
 
 反向推送（主进程 → 渲染进程）均为「订阅函数返回取消订阅函数」模式（参考 onAnalyzeProgress）：
@@ -63,7 +64,7 @@ src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（elec
 
 ### 文件整理安全不变量（electron/fileOps.js，最高优先级）
 
-- **零删除（针对用户文件）**：文件整理相关代码不调用任何删除 API（unlink/rm/rmdir 等）。映射表撤销后只改写 JSON 标 `undone: true` 不删文件；空分类文件夹撤销后保留（前端提示用户手动删）；损坏的记录文件跳过不删。唯一例外是 keyStore.js 删应用自己的密钥文件（用户主动删除密钥、解密失败清理损坏文件），不触碰用户文件
+- **零删除（针对用户文件）**：映射表撤销后只改写 JSON 标 `undone: true` 不删文件；损坏的记录文件跳过不删。仅有两个严格限定的例外：① keyStore.js 删应用自己的密钥文件（用户主动删除密钥、解密失败清理损坏文件）；② `cleanEmptyCreatedFolders`（用户在撤销后主动点「清理空分类文件夹」按钮触发）——候选只来自已撤销记录的 `createdFolders`（应用自己创建过的，渲染进程只传 folderPath 不传名字），删除只用**非递归 `fs.rmdir`**（非空目录天然失败保留），不可能触碰用户文件
 - **只用 `fs.rename`** 移动（同盘原子操作）；EXDEV 跨设备时报错跳过，**绝不退化为复制后删除**
 - **映射表先落盘再动文件**：`organize` 在第一次 rename 之前把完整计划写入 `userData/organize-logs/organize-<ISO时间戳>.json`（`:` `.` 换 `-`，**末尾带 Z**——`organize:restore` 的文件名校验正则必须匹配这个格式）；每条 rename 成功/失败后立刻改写 JSON。撤销对"rename 成功但 JSON 未更新"的崩溃窗口有容错（to 不存在按 skipped 处理）
 - **`checkFolderSafety` 是唯一安全卡口**（organize:run、undoRecord、restoreTo 都先过它），拒绝四类目录：文件系统根目录、系统目录黑名单（前缀边界匹配，Linux/Mac/Windows 各一份）、用户主文件夹本身（子文件夹允许）、隐藏文件夹（路径任一段以 `.` 开头，含 ~/.config 及其子目录）。新增保护规则只改这一个函数

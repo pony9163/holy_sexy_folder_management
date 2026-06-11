@@ -54,6 +54,8 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.on('organize:undo-progress', listener)
       return () => ipcRenderer.removeListener('organize:undo-progress', listener)
     },
+    // 清理整理产生的空分类文件夹（只删应用自己创建且已空的，非递归 rmdir）
+    cleanFolders: (folderPath) => ipcRenderer.invoke('organize:clean-folders', folderPath),
     // 查询全部整理历史（供历史弹窗）
     getHistory: () => ipcRenderer.invoke('organize:history'),
     // 顺序回滚到指定整理之前（logFileName 来自 getHistory 返回的 fileName）

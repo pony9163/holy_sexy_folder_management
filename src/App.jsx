@@ -52,6 +52,8 @@ export default function App() {
   const [showHistory, setShowHistory] = useState(false)  // 是否打开整理历史弹窗
   const [constraints, setConstraints] = useState(loadConstraints) // 分析前的约束开关
   const [confirmLarge, setConfirmLarge] = useState(false) // 文件数超阈值的分析确认框
+  const [cleanable, setCleanable] = useState(null)    // 可清理空分类文件夹 { folderPath }（撤销/恢复后设置）
+  const [cleaning, setCleaning] = useState(false)     // 是否正在清理空文件夹
 
   // 约束变更即写回 localStorage
   useEffect(() => {
@@ -128,6 +130,7 @@ export default function App() {
         setFiles(result.files)
         setAnalyzeStatus(null) // 换了文件夹，清掉旧的分析提示
         setPlans(null)         // 旧文件夹的整理预览也一并清掉
+        setCleanable(null)     // 旧提示条没了，清理按钮一并撤掉
       }
     } finally {
       setLoading(false)
@@ -192,8 +195,10 @@ export default function App() {
         if (res.skipped.length > 0) extra.push(`${res.skipped.length} 个文件已不在原处，已跳过`)
         if (res.renamed.length > 0)
           extra.push(`${res.renamed.length} 个文件因原位置被占用，已加 (1) 后缀恢复`)
-        if (res.keptFolders.length > 0)
-          extra.push('为安全起见，整理时创建的分类文件夹已保留，如不需要可手动删除')
+        if (res.keptFolders.length > 0) {
+          extra.push('整理时创建的分类文件夹已保留')
+          setCleanable({ folderPath: res.folderPath }) // 显示一键清理按钮
+        }
         setAnalyzeStatus({
           ok: true,
           message: `撤销完成：已移回 ${res.restored} 个文件${extra.length > 0 ? '；' + extra.join('；') : ''}`,
@@ -217,8 +222,10 @@ export default function App() {
     if (result.skipped.length > 0) extra.push(`${result.skipped.length} 个文件已不在原处，已跳过`)
     if (result.renamed.length > 0)
       extra.push(`${result.renamed.length} 个文件因原位置被占用，已加 (1) 后缀恢复`)
-    if (result.keptFolders.length > 0)
-      extra.push('为安全起见，整理时创建的分类文件夹已保留，如不需要可手动删除')
+    if (result.keptFolders.length > 0) {
+      extra.push('整理时创建的分类文件夹已保留')
+      setCleanable({ folderPath: result.folderPath }) // 显示一键清理按钮
+    }
     setAnalyzeStatus({
       ok: true,
       message: `恢复完成：已连带撤销 ${result.restoredRecords} 次整理，移回 ${result.restored} 个文件${
@@ -226,6 +233,27 @@ export default function App() {
       }`,
     })
     refreshUndoable()
+  }
+
+  // 点击「清理空分类文件夹」：删掉撤销后留下的、应用自己创建且已空的分类文件夹
+  async function handleCleanFolders() {
+    setCleaning(true)
+    try {
+      const res = await window.api.organize.cleanFolders(cleanable.folderPath)
+      if (res.ok) {
+        // 清理的是当前展示的文件夹时刷新列表
+        if (res.files && res.folderPath === folderPath) setFiles(res.files)
+        const parts = [`已清理 ${res.removed.length} 个空分类文件夹`]
+        if (res.kept.length > 0)
+          parts.push(`${res.kept.length} 个未清理：${res.kept.map((k) => `${k.name}（${k.reason}）`).join('、')}`)
+        setAnalyzeStatus({ ok: true, message: parts.join('；') })
+        setCleanable(null) // 清理完按钮收起
+      } else {
+        setAnalyzeStatus({ ok: false, message: res.error })
+      }
+    } finally {
+      setCleaning(false)
+    }
   }
 
   return (
@@ -358,7 +386,7 @@ export default function App() {
           </p>
         )}
 
-        {/* 分析结果提示条：成功为绿色，失败为红色 */}
+        {/* 分析结果提示条：成功为绿色，失败为红色；撤销后留有空分类文件夹时附清理按钮 */}
         {analyzeStatus && (
           <p
             className={`mb-4 rounded-lg px-4 py-2.5 text-sm ${
@@ -368,6 +396,16 @@ export default function App() {
             }`}
           >
             {analyzeStatus.message}
+            {cleanable && (
+              <button
+                onClick={handleCleanFolders}
+                disabled={cleaning}
+                title="只删除整理时创建且现在为空的分类文件夹，里面有内容的会保留"
+                className="ml-2 underline disabled:opacity-50"
+              >
+                {cleaning ? '清理中…' : '🧹 清理空分类文件夹'}
+              </button>
+            )}
           </p>
         )}
 

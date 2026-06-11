@@ -332,6 +332,39 @@ ipcMain.handle('organize:restore', async (event, logFileName) => {
   }
 })
 
+// 清理整理产生的空分类文件夹（用户在撤销/恢复后主动点击清理按钮）：
+// 候选集由 fileOps 从映射表里取（仅应用自己创建过的），渲染进程只传 folderPath；
+// 删除只用非递归 rmdir，非空目录必然失败保留
+ipcMain.handle('organize:clean-folders', async (_event, rawPath) => {
+  try {
+    // root 双保险，与整理/撤销同理
+    if (typeof process.getuid === 'function' && process.getuid() === 0) {
+      return { ok: false, error: '禁止以 root 身份执行清理' }
+    }
+    if (typeof rawPath !== 'string' || !rawPath) {
+      return { ok: false, error: '未指定要清理的文件夹' }
+    }
+    let folderPath
+    try {
+      folderPath = await fs.realpath(rawPath)
+    } catch {
+      return { ok: false, error: '文件夹不存在或无法访问' }
+    }
+    const result = await fileOps.cleanEmptyCreatedFolders(organizeLogDir(), folderPath)
+    // 目录仍可读则附带刷新后的列表（前端比对 folderPath 再决定是否使用）
+    let files = null
+    try {
+      files = await readFolderEntries(folderPath)
+    } catch {
+      // 目录已不可访问时只返回结果
+    }
+    return { ok: true, ...result, files }
+  } catch (err) {
+    console.error('清理失败:', err.message)
+    return { ok: false, error: err.message || '清理失败' }
+  }
+})
+
 // ===== API 密钥管理 IPC =====
 // 安全约定：完整密钥只在 save/test 时从渲染进程单向传入；
 // 任何 handler 的返回值都不包含完整密钥，日志也不打印密钥。

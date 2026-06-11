@@ -1,8 +1,10 @@
 // 文件整理与撤销的核心逻辑（仅主进程使用，CommonJS）
 //
 // 安全不变量（改动本模块必须维持）：
-// 1. 绝不调用任何删除 API（unlink / rm / rmdir 等一律不出现），
-//    映射表撤销后只改写 JSON 标记 undone，文件本体永不删除
+// 1. 绝不删除用户数据：映射表撤销后只改写 JSON 标记 undone，文件本体永不删除。
+//    唯一例外是 cleanEmptyCreatedFolders（用户主动点击清理按钮触发）：
+//    只对应用自己创建（记录在映射表 createdFolders）且已空的分类文件夹做
+//    非递归 fs.rmdir——该调用天然拒绝非空目录，不可能触碰任何用户文件
 // 2. 移动只用 fs.rename（同盘原子移动），EXDEV 跨设备时直接报错跳过，
 //    绝不退化为「复制后删除」
 // 3. 所有路径拼接一律 path.join / path.resolve，不手写分隔符
@@ -415,10 +417,57 @@ async function restoreTo(logDir, logFileName, onProgress) {
   }
 }
 
+/**
+ * 清理整理产生的空分类文件夹（用户在撤销/恢复后主动点击清理按钮触发）。
+ * 候选集只来自映射表：folderPath 匹配且已撤销（undone）的记录里的 createdFolders
+ * ——即应用自己创建过的文件夹，渲染进程无法指定任意路径。
+ * 删除只用非递归 fs.rmdir：目录非空必然抛错（保留并说明），绝不可能删到用户文件。
+ * @returns {Promise<{removed: string[], kept: Array<{name, reason}>, folderPath: string}>}
+ */
+async function cleanEmptyCreatedFolders(logDir, folderPath) {
+  const unsafe = checkFolderSafety(folderPath)
+  if (unsafe) throw new Error(unsafe)
+
+  // 收集候选：已撤销记录的 createdFolders，且必须直接位于 folderPath 之下（防御历史数据异常）
+  const candidates = new Set()
+  for (const { record } of await readAllRecords(logDir)) {
+    if (record.folderPath === folderPath && record.undone === true) {
+      for (const p of record.createdFolders || []) {
+        if (typeof p === 'string' && path.dirname(path.resolve(p)) === path.resolve(folderPath)) {
+          candidates.add(path.resolve(p))
+        }
+      }
+    }
+  }
+
+  const removed = []
+  const kept = []
+  for (const dir of candidates) {
+    const name = path.basename(dir)
+    try {
+      const st = await fs.lstat(dir)
+      if (!st.isDirectory()) continue // 同名条目已变成文件/链接：不动
+      await fs.rmdir(dir) // 非递归：只能删空文件夹
+      removed.push(name)
+    } catch (err) {
+      if (err.code === 'ENOENT') continue // 已不存在（用户手动删过）
+      kept.push({
+        name,
+        reason:
+          err.code === 'ENOTEMPTY' || err.code === 'EEXIST'
+            ? '文件夹非空，已保留'
+            : translateFsError(err),
+      })
+    }
+  }
+  return { removed, kept, folderPath }
+}
+
 module.exports = {
   checkFolderSafety,
   uniqueName,
   organize,
+  cleanEmptyCreatedFolders,
   readAllRecords,
   findLatestUndoable,
   listHistory,
