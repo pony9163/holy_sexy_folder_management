@@ -1,0 +1,39 @@
+# 在 GitHub 的 macOS runner 上打包 dmg（本地是 Linux，无法构建 mac 产物）
+# 触发方式：手动（Actions 页面 Run workflow）或推送 v* 标签
+name: Build macOS dmg
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 构建前端
+        run: npx vite build
+
+      # CSC_IDENTITY_AUTO_DISCOVERY=false：没有签名证书时跳过签名（产物未签名，
+      # 用户首次打开需右键打开或在系统设置中放行；以后有 Developer ID 证书再接公证）
+      - name: 打包 dmg（arm64 + x64，未签名）
+        run: npx electron-builder --mac --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-dmg
+          path: release/*.dmg
