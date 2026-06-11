@@ -1,2 +1,9 @@
-# 根目录的意外产物，真实项目在 holy_sexy_folder_management/
-/package-lock.json
+# 依赖目录
+node_modules/
+
+# 构建产物
+dist/
+
+# 系统/编辑器临时文件
+.DS_Store
+*.log
