@@ -1,7 +1,8 @@
 /* Tailwind CSS v4：无需 tailwind.config 配置文件，主题令牌全在本文件 */
 @import "tailwindcss";
 
-/* 暗色模式 = html 上的 .dark 类（手动切换 + localStorage 记忆），不跟随系统 */
+/* 暗色模式 = html 上的 .dark 类。挂/摘由 App.jsx 决定：三态 system/light/dark（localStorage 记忆，
+   默认 system——经 matchMedia 跟随系统明暗），CSS 侧只认 .dark 类本身 */
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* 语义令牌注册成 Tailwind 颜色：组件里用 bg-canvas / bg-surface / text-ink 等类名，

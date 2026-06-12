@@ -14,6 +14,7 @@ import {
   Undo2,
   Sun,
   Moon,
+  Monitor,
   Loader2,
 } from 'lucide-react'
 import FileTable from './components/FileTable'
@@ -27,7 +28,7 @@ import WindowControls from './components/WindowControls'
 const isMac = window.api.platform === 'darwin'
 const isLinux = window.api.platform === 'linux'
 
-// 主题持久化 key：'dark' | 'light'，默认暗色（与应用图标气质一致）
+// 主题持久化 key：'system' | 'light' | 'dark'，默认跟随系统明暗（KDE/mac 等切配色实时跟随）
 const THEME_KEY = 'ui-theme'
 
 // 约束开关的持久化 key 与默认值（跨会话记住用户习惯）
@@ -92,13 +93,28 @@ export default function App() {
   const [confirmLarge, setConfirmLarge] = useState(false) // 文件数超阈值的分析确认框
   const [cleanable, setCleanable] = useState(null)    // 可清理空分类文件夹 { folderPath }（撤销/恢复后设置）
   const [cleaning, setCleaning] = useState(false)     // 是否正在清理空文件夹
-  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'dark') // 界面主题
+  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'system') // 界面主题（system=跟随系统）
+  // 系统当前是否暗色：matchMedia 实时反映 nativeTheme/桌面配色（Plasma 6 走 freedesktop portal）
+  const [systemDark, setSystemDark] = useState(
+    () => window.matchMedia('(prefers-color-scheme: dark)').matches,
+  )
+
+  // 订阅系统明暗切换（仅「跟随系统」态会用到，常驻订阅开销可忽略）
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const listener = (e) => setSystemDark(e.matches)
+    mq.addEventListener('change', listener)
+    return () => mq.removeEventListener('change', listener)
+  }, [])
+
+  // 实际生效的明暗：手动锁定优先，「跟随系统」时由 systemDark 决定
+  const isDark = theme === 'dark' || (theme === 'system' && systemDark)
 
   // 主题切换：html 上挂/摘 .dark 类（index.css 的 @custom-variant 据此生效）并持久化
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark')
+    document.documentElement.classList.toggle('dark', isDark)
     localStorage.setItem(THEME_KEY, theme)
-  }, [theme])
+  }, [theme, isDark])
 
   // 约束变更即写回 localStorage
   useEffect(() => {
@@ -402,13 +418,27 @@ export default function App() {
             >
               <Settings size={16} />
             </button>
-            {/* 主题切换：暗/亮 */}
+            {/* 主题切换：跟随系统→亮→暗 三态循环，图标显示当前态 */}
             <button
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              title={theme === 'dark' ? '切换到亮色主题' : '切换到暗色主题'}
+              onClick={() =>
+                setTheme(theme === 'system' ? 'light' : theme === 'light' ? 'dark' : 'system')
+              }
+              title={
+                theme === 'system'
+                  ? '主题：跟随系统（点击切换到亮色）'
+                  : theme === 'light'
+                    ? '主题：亮色（点击切换到暗色）'
+                    : '主题：暗色（点击切换到跟随系统）'
+              }
               className="inline-flex items-center rounded-full border border-line bg-surface px-3 py-2 text-ink-2 transition hover:bg-sunken active:scale-[0.98]"
             >
-              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+              {theme === 'system' ? (
+                <Monitor size={16} />
+              ) : theme === 'light' ? (
+                <Sun size={16} />
+              ) : (
+                <Moon size={16} />
+              )}
             </button>
           </div>
         </div>
