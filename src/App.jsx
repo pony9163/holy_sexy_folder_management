@@ -321,10 +321,18 @@ export default function App() {
             isMac ? 'pl-20 pr-5' : 'pl-5 pr-[150px]'
           }`}
         >
-          {/* min-w-0 + truncate：空间不足时标题截断，绝不挤压右侧按钮 */}
+          {/* 选中文件夹后左上角显示路径；默认窗宽 900 放不下两者，<lg 时隐藏应用名把空间让给路径 */}
           <h1 className="flex min-w-0 select-none items-center gap-2.5 text-[15px] font-semibold text-ink">
             <FolderOpen size={20} className="shrink-0 text-accent" />
-            <span className="truncate">holy_sexy_folder_management</span>
+            {/* min-w-0 + truncate：空间不足时标题截断，绝不挤压右侧按钮 */}
+            <span className={folderPath ? 'hidden shrink-0 lg:block' : 'truncate'}>
+              holy_sexy_folder_management
+            </span>
+            {folderPath && (
+              <span className="min-w-0 truncate text-[13px] font-normal text-ink-3" title={folderPath}>
+                {folderPath}
+              </span>
+            )}
           </h1>
           {/* 按钮全部 nowrap：宁可标题截断，也不能让按钮文字竖排 */}
           <div className="app-no-drag flex shrink-0 gap-2 whitespace-nowrap">
