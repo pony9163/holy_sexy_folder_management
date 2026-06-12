@@ -51,7 +51,7 @@ function createWindow() {
   const isMac = process.platform === 'darwin'
   const nativeFrame = process.env.HSF_NATIVE_FRAME === '1'
   const win = new BrowserWindow({
-    width: 900,
+    width: 1080, // ≥ Tailwind lg(1024)：header 能同时放下应用名和当前文件夹路径
     height: 680,
     title: 'holy_sexy_folder_management',
     backgroundColor: '#0e0e10', // 与默认暗色主题的 --canvas 一致（index.css 改动需同步此处），避免启动白闪
