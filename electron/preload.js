@@ -56,10 +56,10 @@ contextBridge.exposeInMainWorld('api', {
     // 执行整理：{ folderPath, groups: [{ folderName, fileNames }], allowDirs }
     // allowDirs=true 时允许移动文件夹（「不整理已有文件夹」开关关闭的显式放行）
     run: (payload) => ipcRenderer.invoke('organize:run', payload),
-    // 撤销最近一次整理
-    undo: () => ipcRenderer.invoke('organize:undo'),
-    // 查询是否有可撤销记录（供按钮显隐）
-    getUndoable: () => ipcRenderer.invoke('organize:get-undoable'),
+    // 撤销该文件夹最近一次整理
+    undo: (folderPath) => ipcRenderer.invoke('organize:undo', folderPath),
+    // 查询该文件夹是否有可撤销记录（供按钮显隐）
+    getUndoable: (folderPath) => ipcRenderer.invoke('organize:get-undoable', folderPath),
     // 订阅整理进度 { current, total }，返回取消订阅函数
     onProgress: (callback) => {
       const listener = (_event, progress) => callback(progress)

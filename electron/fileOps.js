@@ -265,10 +265,16 @@ async function readAllRecords(logDir) {
   return out
 }
 
-/** 找最近一次未撤销的整理记录，没有则返回 null */
-async function findLatestUndoable(logDir) {
+/**
+ * 找最近一次未撤销的整理记录，没有则返回 null。
+ * 传入 folderPath 时只看该文件夹的记录（严格字符串比对，落盘前已 realpath 规范化，
+ * 调用方需先 realpath 入参——与 restoreTo 的链条语义一致）；不传保持全局行为。
+ */
+async function findLatestUndoable(logDir, folderPath) {
   for (const { record, filePath } of await readAllRecords(logDir)) {
-    if (record.undone !== true) return { record, filePath }
+    if (record.undone !== true && (!folderPath || record.folderPath === folderPath)) {
+      return { record, filePath }
+    }
   }
   return null
 }
@@ -355,10 +361,12 @@ async function undoRecord(record, filePath, onProgress) {
   }
 }
 
-/** 撤销最近一次未撤销的整理（undoRecord 的薄壳，保持原有对外行为） */
-async function undoOrganize(logDir, onProgress) {
-  const found = await findLatestUndoable(logDir)
-  if (!found) throw new Error('没有可撤销的整理记录')
+/** 撤销最近一次未撤销的整理（undoRecord 的薄壳）；folderPath 限定只撤销该文件夹的 */
+async function undoOrganize(logDir, folderPath, onProgress) {
+  const found = await findLatestUndoable(logDir, folderPath)
+  if (!found) {
+    throw new Error(folderPath ? '该文件夹没有可撤销的整理记录' : '没有可撤销的整理记录')
+  }
   return undoRecord(found.record, found.filePath, onProgress)
 }
 

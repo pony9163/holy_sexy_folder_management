@@ -44,8 +44,8 @@ src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（elec
   ├─ analyze-files           → electron/ai.js analyzeFiles（一次返回三套方案）
   ├─ adjust-plan             → electron/ai.js adjustPlan（对话调整当前方案，只生成 JSON 不动文件）
   ├─ organize:run            → electron/fileOps.js organize（创建分类文件夹 + fs.rename 移动）
-  ├─ organize:undo           → fileOps undoOrganize（撤销最近一次未撤销的整理）
-  ├─ organize:get-undoable   → fileOps findLatestUndoable（撤销按钮显隐）
+  ├─ organize:undo           → fileOps undoOrganize（撤销该文件夹最近一次未撤销的整理，入参 folderPath）
+  ├─ organize:get-undoable   → fileOps findLatestUndoable（按当前 folderPath 查询，供撤销按钮显隐）
   ├─ organize:history        → fileOps listHistory（历史弹窗的快照摘要列表）
   ├─ organize:restore        → fileOps restoreTo（顺序回滚到某次整理之前）
   ├─ organize:clean-folders  → fileOps cleanEmptyCreatedFolders（删撤销后留下的空分类文件夹）

@@ -284,14 +284,24 @@ ipcMain.handle('organize:run', async (event, payload) => {
   }
 })
 
-// 撤销最近一次整理：按映射表把文件移回原位，进度经 organize:undo-progress 推送
-ipcMain.handle('organize:undo', async (event) => {
+// 撤销指定文件夹最近一次整理：按映射表把文件移回原位，进度经 organize:undo-progress 推送
+ipcMain.handle('organize:undo', async (event, rawPath) => {
   try {
     // root 双保险，与整理同理
     if (typeof process.getuid === 'function' && process.getuid() === 0) {
       return { ok: false, error: '禁止以 root 身份执行撤销' }
     }
-    const result = await fileOps.undoOrganize(organizeLogDir(), (current, total) => {
+    if (typeof rawPath !== 'string' || !rawPath) {
+      return { ok: false, error: '未指定要撤销的文件夹' }
+    }
+    // realpath 消解符号链接，与记录里落盘前规范化过的 folderPath 对齐（同 clean-folders）
+    let folderPath
+    try {
+      folderPath = await fs.realpath(rawPath)
+    } catch {
+      return { ok: false, error: '文件夹不存在或无法访问' }
+    }
+    const result = await fileOps.undoOrganize(organizeLogDir(), folderPath, (current, total) => {
       event.sender.send('organize:undo-progress', { current, total })
     })
     // 撤销的目录若仍可读则附带刷新后的列表（前端比对 folderPath 再决定是否使用）
@@ -308,10 +318,20 @@ ipcMain.handle('organize:undo', async (event) => {
   }
 })
 
-// 查询是否有可撤销的整理记录（供"撤销上次整理"按钮显隐）
-ipcMain.handle('organize:get-undoable', async () => {
+// 查询指定文件夹是否有可撤销的整理记录（供"撤销上次整理"按钮显隐）
+ipcMain.handle('organize:get-undoable', async (_event, rawPath) => {
   try {
-    const found = await fileOps.findLatestUndoable(organizeLogDir())
+    // 被动查询：入参非法或目录不可访问时静默返回"不可撤销"，不报错
+    if (typeof rawPath !== 'string' || !rawPath) {
+      return { ok: true, undoable: false, info: null }
+    }
+    let folderPath
+    try {
+      folderPath = await fs.realpath(rawPath)
+    } catch {
+      return { ok: true, undoable: false, info: null }
+    }
+    const found = await fileOps.findLatestUndoable(organizeLogDir(), folderPath)
     if (!found) return { ok: true, undoable: false, info: null }
     const { record } = found
     return {

@@ -155,14 +155,19 @@ export default function App() {
   // 订阅撤销进度事件（主进程每移回一个文件推送一次）
   useEffect(() => window.api.organize.onUndoProgress(setUndoProgress), [])
 
-  // 查询是否有可撤销的整理记录（启动时 + 每次整理/撤销完成后刷新）
-  async function refreshUndoable() {
-    const res = await window.api.organize.getUndoable()
+  // 查询某文件夹是否有可撤销的整理记录（按当前文件夹作用域；整理/撤销/恢复完成后也刷新）
+  async function refreshUndoable(path) {
+    if (!path) {
+      setUndoable(null) // 未选择文件夹时不显示撤销按钮
+      return
+    }
+    const res = await window.api.organize.getUndoable(path)
     if (res.ok) setUndoable(res)
   }
+  // 启动（folderPath 为空→隐藏）和每次切换文件夹时查询该文件夹的可撤销状态
   useEffect(() => {
-    refreshUndoable()
-  }, [])
+    refreshUndoable(folderPath)
+  }, [folderPath])
 
   // 点击按钮：通过 preload 暴露的 window.api 让主进程弹出对话框并读取目录
   async function handleSelectFolder() {
@@ -221,15 +226,15 @@ export default function App() {
         result.errors.length > 0 ? `，${result.errors.length} 个未能移动` : ''
       }`,
     })
-    refreshUndoable()
+    refreshUndoable(folderPath)
   }
 
-  // 点击「撤销上次整理」：按最近的映射表把文件移回原位
+  // 点击「撤销上次整理」：按当前文件夹最近的映射表把文件移回原位
   async function handleUndo() {
     setUndoing(true)
     setUndoProgress(null)
     try {
-      const res = await window.api.organize.undo()
+      const res = await window.api.organize.undo(folderPath)
       if (res.ok) {
         // 撤销的是当前展示的文件夹时才刷新列表
         if (res.files && res.folderPath === folderPath) {
@@ -253,7 +258,7 @@ export default function App() {
       }
     } finally {
       setUndoing(false)
-      refreshUndoable()
+      refreshUndoable(folderPath)
     }
   }
 
@@ -277,7 +282,7 @@ export default function App() {
         extra.length > 0 ? '；' + extra.join('；') : ''
       }`,
     })
-    refreshUndoable()
+    refreshUndoable(folderPath)
   }
 
   // 点击「清理空分类文件夹」：删掉撤销后留下的、应用自己创建且已空的分类文件夹
@@ -336,14 +341,14 @@ export default function App() {
           </h1>
           {/* 按钮全部 nowrap：宁可标题截断，也不能让按钮文字竖排 */}
           <div className="app-no-drag flex shrink-0 gap-2 whitespace-nowrap">
-            {/* 撤销按钮：只在有可撤销记录时显示，悬停可见上次整理的文件夹和时间 */}
+            {/* 撤销按钮：只在当前文件夹有可撤销记录时显示，悬停可见上次整理的时间 */}
             {undoable?.undoable && (
               <button
                 onClick={handleUndo}
                 disabled={undoing}
-                title={`上次整理：${undoable.info.folderPath}（${new Date(
+                title={`上次整理：${new Date(
                   undoable.info.createdAt,
-                ).toLocaleString()}，${undoable.info.moveCount} 个文件）`}
+                ).toLocaleString()}，${undoable.info.moveCount} 个文件`}
                 className="inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 px-4 py-2 text-sm font-medium tabular-nums text-warning transition hover:bg-warning/20 active:scale-[0.98] disabled:opacity-50"
               >
                 <Undo2 size={15} />
