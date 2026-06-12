@@ -22,8 +22,13 @@ export default function FileTable({ files }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-line bg-surface">
-          {sorted.map((file) => (
-            <tr key={file.name} className="transition-colors hover:bg-sunken/60">
+          {sorted.map((file, i) => (
+            <tr
+              key={file.name}
+              className="animate-fade-in transition-[background-color,box-shadow] hover:bg-sunken/60 hover:shadow-[inset_2.5px_0_0_0_var(--accent)]"
+              /* 行级错峰入场：第 15 行后封顶，长列表不拖沓 */
+              style={{ animationDelay: `${Math.min(i, 15) * 25}ms` }}
+            >
               {/* 名称：文件夹用 Folder 图标（强调色），文件用 FileText */}
               <td className="px-4 py-2.5 text-ink">
                 <span className="inline-flex items-center gap-2">

@@ -68,7 +68,7 @@ export default function HistoryModal({ onClose, onRestored }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg animate-pop-in rounded-2xl border border-line bg-surface p-6 shadow-modal"
+        className="border-flow w-full max-w-lg animate-spring-pop rounded-2xl border border-line bg-surface p-6 shadow-modal"
       >
         {/* ===== 列表阶段 ===== */}
         {phase === null && (
@@ -181,7 +181,7 @@ export default function HistoryModal({ onClose, onRestored }) {
               </button>
               <button
                 onClick={handleRestore}
-                className="rounded-full bg-accent px-5 py-2 text-sm font-medium text-white transition hover:bg-accent-hi active:scale-[0.98]"
+                className="rounded-full bg-accent px-5 py-2 text-sm font-medium text-white transition hover:bg-accent-hi hover:shadow-glow-md active:scale-[0.98]"
               >
                 开始恢复{pending.chain.length > 1 ? `（连带撤销 ${pending.chain.length} 次）` : ''}
               </button>
@@ -199,7 +199,7 @@ export default function HistoryModal({ onClose, onRestored }) {
             </p>
             <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-sunken">
               <div
-                className="h-full rounded-full bg-accent transition-all"
+                className="shimmer h-full rounded-full bg-accent shadow-glow-sm transition-all"
                 style={{
                   width: restoreProgress
                     ? `${Math.round((restoreProgress.current / restoreProgress.total) * 100)}%`
@@ -242,7 +242,7 @@ export default function HistoryModal({ onClose, onRestored }) {
             <div className="mt-5 flex justify-end">
               <button
                 onClick={finishRestore}
-                className="rounded-full bg-accent px-5 py-2 text-sm font-medium text-white transition hover:bg-accent-hi active:scale-[0.98]"
+                className="rounded-full bg-accent px-5 py-2 text-sm font-medium text-white transition hover:bg-accent-hi hover:shadow-glow-md active:scale-[0.98]"
               >
                 完成
               </button>

@@ -4,6 +4,7 @@
 // - 点「分析」：把文件清单发给 DeepSeek 生成分类方案，结果以预览卡片展示（可排除文件后确认）
 // - ⚙️ 设置：填写/管理 DeepSeek API Key（加密存储在主进程侧）
 import { useEffect, useMemo, useState } from 'react'
+import { flushSync } from 'react-dom'
 import {
   FolderOpen,
   FolderSearch,
@@ -115,6 +116,41 @@ export default function App() {
     document.documentElement.classList.toggle('dark', isDark)
     localStorage.setItem(THEME_KEY, theme)
   }, [theme, isDark])
+
+  // 主题三态循环 + 圆形扩散动效：明暗实际变化时用 View Transitions 从按钮位置揭开新主题；
+  // API 不存在或明暗不变（如 暗→跟随系统 且系统也是暗）时直接切换。
+  // 注意 .dark 类必须在 startViewTransition 回调内同步切换（useEffect 在快照之后才跑），
+  // 回调里手动 toggle 一次，随后 effect 重放同值是无害的幂等操作
+  function cycleTheme(e) {
+    const next = theme === 'system' ? 'light' : theme === 'light' ? 'dark' : 'system'
+    const nextDark = next === 'dark' || (next === 'system' && systemDark)
+    if (!document.startViewTransition || nextDark === isDark) {
+      setTheme(next)
+      return
+    }
+    // 键盘触发时 clientX/Y 为 0，退回按钮中心
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX || rect.left + rect.width / 2
+    const y = e.clientY || rect.top + rect.height / 2
+    const vt = document.startViewTransition(() => {
+      document.documentElement.classList.toggle('dark', nextDark)
+      flushSync(() => setTheme(next))
+    })
+    vt.ready.then(() => {
+      const r = Math.hypot(
+        Math.max(x, window.innerWidth - x),
+        Math.max(y, window.innerHeight - y),
+      )
+      document.documentElement.animate(
+        { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${r}px at ${x}px ${y}px)`] },
+        {
+          duration: 420,
+          easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+          pseudoElement: '::view-transition-new(root)',
+        },
+      )
+    })
+  }
 
   // 约束变更即写回 localStorage
   useEffect(() => {
@@ -330,7 +366,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-canvas text-ink transition-colors">
+    <div className="min-h-screen text-ink transition-colors">
+      {/* 科技感背景：网格缓慢漂移 + 顶部 accent 光晕，z-index:-1 垫在 html 底色与内容之间 */}
+      <div className="bg-tech-grid" aria-hidden="true" />
       {/* 毛玻璃顶栏 = 无边框窗口的标题栏：app-drag 整体可拖拽移动窗口，
           交互元素套 app-no-drag；sticky 通栏，内容滚动时从玻璃下穿过（macOS 质感的关键） */}
       <header
@@ -365,7 +403,7 @@ export default function App() {
                 title={`上次整理：${new Date(
                   undoable.info.createdAt,
                 ).toLocaleString()}，${undoable.info.moveCount} 个文件`}
-                className="inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 px-4 py-2 text-sm font-medium tabular-nums text-warning transition hover:bg-warning/20 active:scale-[0.98] disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning/10 px-4 py-2 text-sm font-medium tabular-nums text-warning transition hover:bg-warning/20 hover:shadow-[0_0_10px_rgba(255,159,10,0.3)] active:scale-[0.98] disabled:opacity-50"
               >
                 <Undo2 size={15} />
                 {undoing
@@ -379,7 +417,7 @@ export default function App() {
             <button
               onClick={() => setShowHistory(true)}
               title="查看整理历史并恢复"
-              className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-4 py-2 text-sm font-medium text-ink-2 transition hover:bg-sunken active:scale-[0.98]"
+              className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-4 py-2 text-sm font-medium text-ink-2 transition hover:bg-sunken hover:shadow-glow-sm active:scale-[0.98]"
             >
               <History size={15} />
               整理历史
@@ -393,7 +431,9 @@ export default function App() {
                   ? '所有条目都被约束开关跳过，没有可分析的文件'
                   : undefined
               }
-              className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-medium tabular-nums text-white transition hover:bg-accent-hi active:scale-[0.98] disabled:opacity-50"
+              className={`inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-medium tabular-nums text-white transition hover:bg-accent-hi hover:shadow-glow-md active:scale-[0.98] disabled:opacity-50 ${
+                analyzing ? 'shimmer animate-glow-pulse' : ''
+              }`}
             >
               {analyzing ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
               {analyzing
@@ -405,7 +445,7 @@ export default function App() {
             <button
               onClick={handleSelectFolder}
               disabled={loading}
-              className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:bg-sunken active:scale-[0.98] disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-4 py-2 text-sm font-medium text-ink transition hover:bg-sunken hover:shadow-glow-sm active:scale-[0.98] disabled:opacity-50"
             >
               <FolderSearch size={15} />
               {loading ? '读取中…' : '选择文件夹'}
@@ -414,15 +454,13 @@ export default function App() {
             <button
               onClick={() => setShowSettings(true)}
               title="API Key 设置"
-              className="inline-flex items-center rounded-full border border-line bg-surface px-3 py-2 text-ink-2 transition hover:bg-sunken active:scale-[0.98]"
+              className="inline-flex items-center rounded-full border border-line bg-surface px-3 py-2 text-ink-2 transition hover:bg-sunken hover:shadow-glow-sm active:scale-[0.98]"
             >
               <Settings size={16} />
             </button>
-            {/* 主题切换：跟随系统→亮→暗 三态循环，图标显示当前态 */}
+            {/* 主题切换：跟随系统→亮→暗 三态循环，图标显示当前态；明暗变化时圆形扩散揭开 */}
             <button
-              onClick={() =>
-                setTheme(theme === 'system' ? 'light' : theme === 'light' ? 'dark' : 'system')
-              }
+              onClick={cycleTheme}
               title={
                 theme === 'system'
                   ? '主题：跟随系统（点击切换到亮色）'
@@ -430,7 +468,7 @@ export default function App() {
                     ? '主题：亮色（点击切换到暗色）'
                     : '主题：暗色（点击切换到跟随系统）'
               }
-              className="inline-flex items-center rounded-full border border-line bg-surface px-3 py-2 text-ink-2 transition hover:bg-sunken active:scale-[0.98]"
+              className="inline-flex items-center rounded-full border border-line bg-surface px-3 py-2 text-ink-2 transition hover:bg-sunken hover:shadow-glow-sm active:scale-[0.98]"
             >
               {theme === 'system' ? (
                 <Monitor size={16} />
@@ -444,6 +482,12 @@ export default function App() {
         </div>
         {/* 非 mac：自绘窗口控制按钮（api.win 存在性兜底：preload 未更新的旧会话不渲染） */}
         {!isMac && window.api.win && <WindowControls />}
+        {/* AI 分析中：header 底边扫描线（sticky 即定位元素，absolute 直接锚定在 header 上） */}
+        {analyzing && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-[-1px] h-px overflow-hidden">
+            <div className="scan-bar" />
+          </div>
+        )}
       </header>
 
       {/* 主内容区：全宽自适应，宽屏下表格/预览随窗口拉伸（文件管理类应用惯例） */}
@@ -553,14 +597,16 @@ export default function App() {
             )}
           </>
         ) : (
-          /* 空状态：图标方块 + 标题/描述两级文字（虚线框显得临时，已弃用） */
-          <div className="flex animate-fade-in flex-col items-center gap-5 py-28 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-line bg-surface shadow-card">
+          /* 空状态：图标→标题→描述分阶段入场（fade-in fill both，延迟期间不可见） */
+          <div className="flex flex-col items-center gap-5 py-28 text-center">
+            <div className="flex h-16 w-16 animate-spring-pop items-center justify-center rounded-2xl border border-line bg-surface shadow-card">
               <FolderOpen size={28} className="text-ink-3" />
             </div>
             <div>
-              <p className="text-base font-medium text-ink">选择一个文件夹开始</p>
-              <p className="mt-1.5 text-sm text-ink-3">
+              <p className="animate-fade-in text-base font-medium text-ink [animation-delay:120ms]">
+                选择一个文件夹开始
+              </p>
+              <p className="mt-1.5 animate-fade-in text-sm text-ink-3 [animation-delay:220ms]">
                 AI 会为第一层文件生成三套分类方案，确认后才会移动文件
               </p>
             </div>
@@ -576,7 +622,7 @@ export default function App() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm animate-pop-in rounded-2xl border border-line bg-surface p-6 shadow-modal"
+            className="border-flow w-full max-w-sm animate-spring-pop rounded-2xl border border-line bg-surface p-6 shadow-modal"
           >
             <p className="text-ink">
               文件较多（{eligibleFiles.length} 个），AI

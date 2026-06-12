@@ -25,6 +25,9 @@
   --shadow-card: var(--shadow-1);
   --shadow-raised: var(--shadow-2);
   --shadow-modal: var(--shadow-3);
+  /* 辉光分级（科技感光效）：sm=次级按钮/进度条/选中 Tab，md=实底 accent 按钮 hover */
+  --shadow-glow-sm: var(--glow-sm);
+  --shadow-glow-md: var(--glow-md);
 }
 
 /* 亮色主题（默认变量）：Apple 系配色——苹果蓝 accent、发丝级半透明边框。
@@ -45,6 +48,10 @@
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 1px rgba(0, 0, 0, 0.03);
   --shadow-2: 0 2px 6px rgba(0, 0, 0, 0.06), 0 8px 24px -8px rgba(0, 0, 0, 0.10);
   --shadow-3: 0 8px 24px rgba(0, 0, 0, 0.12), 0 32px 64px -16px rgba(0, 0, 0, 0.22);
+  /* 辉光与背景网格：亮色下都收敛（白底辉光容易脏） */
+  --glow-sm: 0 0 10px rgba(0, 113, 227, 0.22);
+  --glow-md: 0 0 16px rgba(0, 113, 227, 0.30), 0 0 36px rgba(0, 113, 227, 0.12);
+  --grid-line: rgba(0, 0, 0, 0.028);
 }
 
 /* 暗色主题：近黑底、surface 靠亮度差+阴影浮起（深邃版，2026-06 升级）。
@@ -65,23 +72,30 @@
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.45);
   --shadow-2: 0 2px 8px rgba(0, 0, 0, 0.50), 0 10px 28px -8px rgba(0, 0, 0, 0.55);
   --shadow-3: 0 10px 28px rgba(0, 0, 0, 0.55), 0 40px 80px -20px rgba(0, 0, 0, 0.75);
+  /* 暗色辉光更亮、网格更明显（科技感主舞台在暗色） */
+  --glow-sm: 0 0 12px rgba(10, 132, 255, 0.40);
+  --glow-md: 0 0 20px rgba(10, 132, 255, 0.50), 0 0 44px rgba(10, 132, 255, 0.22);
+  --grid-line: rgba(255, 255, 255, 0.04);
 }
 
-/* 背景色随主题切换时平滑过渡；字体走 Apple 系统栈（无 SF 的平台回退苹方/鸿蒙黑/雅黑） */
+/* 页面底色挂在 html 上（根容器不再铺 bg-canvas，给 z-index:-1 的 .bg-tech-grid 留出夹层）；
+   主题切换时平滑过渡。字体走 Apple 系统栈（无 SF 的平台回退苹方/鸿蒙黑/雅黑） */
 html {
   background: var(--canvas);
+  transition: background-color 0.2s ease;
 }
 body {
   font-family:
     -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'HarmonyOS Sans SC',
     'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif;
   -webkit-font-smoothing: antialiased;
-  transition: background-color 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* ===== 微动效 =====
-   fade-in：提示条/卡片淡入上移；pop-in：弹窗轻微放大入场。
-   曲线用 Apple 惯用的标准 ease，克制（≤0.2s） */
+/* ===== 动效系统（2026-06 科技风升级）=====
+   入场类：fade-in（淡入上移）、spring-pop（弹窗回弹）、slide-in-left/right（聊天气泡定向滑入）
+   光效类：shimmer（表面流光扫过）、scan（扫描线）、border-flow（流光边框）、glow-pulse（辉光呼吸）
+   一律只动 transform/opacity/背景位移（GPU 友好）；pop-in 保留兼容旧用法 */
 @keyframes fade-in {
   from {
     opacity: 0;
@@ -102,11 +116,220 @@ body {
     transform: scale(1);
   }
 }
+/* 弹窗回弹：放大过冲到 1.02 再落回，比 pop-in 更有"弹簧"质感 */
+@keyframes spring-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+/* 聊天气泡定向滑入：用户消息从右、AI 回复从左，带 1px 过冲 */
+@keyframes slide-in-right {
+  0% {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+  70% {
+    opacity: 1;
+    transform: translateX(-1px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes slide-in-left {
+  0% {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+  70% {
+    opacity: 1;
+    transform: translateX(1px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+/* 表面流光：高光带从左扫到右（background-position 位移，元素自身底色不受影响） */
+@keyframes shimmer {
+  from {
+    background-position: 180% 0;
+  }
+  to {
+    background-position: -80% 0;
+  }
+}
+/* 扫描线：40% 宽的光带在容器内往返（容器需 overflow-hidden） */
+@keyframes scan {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(350%);
+  }
+}
+/* 辉光呼吸：配合 --glow-md 用在长时间运行的状态指示上 */
+@keyframes glow-pulse {
+  0%,
+  100% {
+    box-shadow: var(--glow-sm);
+  }
+  50% {
+    box-shadow: var(--glow-md);
+  }
+}
 @utility animate-fade-in {
   animation: fade-in 0.2s cubic-bezier(0.25, 0.1, 0.25, 1) both;
 }
 @utility animate-pop-in {
   animation: pop-in 0.18s cubic-bezier(0.25, 0.1, 0.25, 1) both;
+}
+@utility animate-spring-pop {
+  animation: spring-pop 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@utility animate-slide-in-right {
+  animation: slide-in-right 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@utility animate-slide-in-left {
+  animation: slide-in-left 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@utility animate-glow-pulse {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+/* 流光扫过表面：叠一层渐变高光循环扫过，用于「分析中」按钮和进度条填充带。
+   白色高光对实底 accent 蓝和半透明底都适用 */
+.shimmer {
+  background-image: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 60%
+  );
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  animation: shimmer 1.5s linear infinite;
+}
+
+/* 扫描线本体：放进 absolute inset-x-0 bottom-0 h-px overflow-hidden 的容器里 */
+.scan-bar {
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  animation: scan 1.6s ease-in-out infinite;
+}
+
+/* 流光边框：conic 渐变沿边框旋转（@property 让角度可平滑动画，1px 蒙版只留边缘）。
+   .border-flow=常驻（弹窗）；.border-flow-hover=悬停渐显（卡片）。容器需非 static 定位 */
+@property --bf-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes border-flow-spin {
+  to {
+    --bf-angle: 360deg;
+  }
+}
+.border-flow,
+.border-flow-hover {
+  position: relative;
+}
+.border-flow::before,
+.border-flow-hover::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--bf-angle),
+    transparent 0%,
+    var(--accent) 14%,
+    transparent 30%,
+    transparent 50%,
+    color-mix(in srgb, var(--accent) 55%, transparent) 64%,
+    transparent 80%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: border-flow-spin 3.6s linear infinite;
+  pointer-events: none;
+}
+.border-flow-hover::before {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.border-flow-hover:hover::before {
+  opacity: 1;
+}
+
+/* 科技感背景：fixed 网格层（缓慢漂移一格无缝循环，transform 走合成器）+ 顶部 accent 微光晕。
+   网格画在 ::before 上并向外扩一格，漂移时不露边 */
+@keyframes grid-drift {
+  to {
+    transform: translate(48px, 48px);
+  }
+}
+.bg-tech-grid {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+  background: radial-gradient(
+    ellipse 90% 55% at 50% -12%,
+    color-mix(in srgb, var(--accent) 7%, transparent),
+    transparent 70%
+  );
+}
+.bg-tech-grid::before {
+  content: '';
+  position: absolute;
+  inset: -48px 0 0 -48px;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 48px 48px;
+  animation: grid-drift 36s linear infinite;
+}
+
+/* 主题切换圆形扩散（View Transitions）：关掉默认交叉淡入，揭开动画由 App.jsx
+   对 ::view-transition-new(root) 调 element.animate(clip-path circle) 驱动 */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-old(root) {
+  z-index: 1;
+}
+::view-transition-new(root) {
+  z-index: 2;
+}
+
+/* 无障碍兜底：系统开启"减少动态效果"时，所有动画/过渡压到不可感知 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* ===== 无边框窗口 =====

@@ -86,7 +86,7 @@ export default function ApiKeyModal({ onClose, onStatusChange }) {
     >
       {/* 弹窗主体，阻止冒泡避免误关 */}
       <div
-        className="w-full max-w-md animate-pop-in rounded-2xl border border-line bg-surface p-6 shadow-modal"
+        className="border-flow w-full max-w-md animate-spring-pop rounded-2xl border border-line bg-surface p-6 shadow-modal"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="mb-4 inline-flex items-center gap-2 text-lg font-bold text-ink">
@@ -153,7 +153,7 @@ export default function ApiKeyModal({ onClose, onStatusChange }) {
           <button
             onClick={handleSave}
             disabled={busy || !input.trim()}
-            className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-hi active:scale-[0.98] disabled:opacity-50"
+            className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-hi hover:shadow-glow-md active:scale-[0.98] disabled:opacity-50"
           >
             保存
           </button>

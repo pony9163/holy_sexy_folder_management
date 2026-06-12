@@ -15,7 +15,8 @@ function FolderCard({ folder, fileMap, excludedSet, onToggle, style }) {
   return (
     <div
       style={style}
-      className="animate-fade-in overflow-hidden rounded-xl border border-line bg-surface shadow-card"
+      /* overflow-hidden 会裁掉流光边框伪元素，hover 反馈用 accent 边框 + 辉光替代 */
+      className="animate-fade-in overflow-hidden rounded-xl border border-line bg-surface shadow-card transition-[border-color,box-shadow] duration-300 hover:border-accent/40 hover:shadow-glow-sm"
     >
       {/* 卡片头：文件夹名 + 文件计数 */}
       <div className="flex items-center justify-between border-b border-line bg-sunken px-4 py-3">
@@ -247,7 +248,7 @@ export default function PlanPreview({
             }}
             className={`rounded-lg px-4 py-1.5 text-sm transition-all active:scale-[0.98] ${
               i === activeIndex
-                ? 'bg-surface font-medium text-ink shadow-sm'
+                ? 'bg-surface font-medium text-ink shadow-glow-sm'
                 : 'text-ink-2 hover:text-ink'
             }`}
           >
@@ -256,8 +257,9 @@ export default function PlanPreview({
         ))}
       </div>
 
-      {/* 卡片树：每个新文件夹一张卡片，依次错峰入场（delay 封顶，长列表不拖沓） */}
-      <div className="space-y-4">
+      {/* 卡片树：每个新文件夹一张卡片，依次错峰入场（delay 封顶，长列表不拖沓）；
+          key=activeIndex 让切换方案 Tab 时整组卡片重新入场 */}
+      <div key={activeIndex} className="space-y-4">
         {resolvedFolders.map((folder, i) => (
           <FolderCard
             key={folder.name}
@@ -284,8 +286,8 @@ export default function PlanPreview({
         </div>
       )}
 
-      {/* 聊天面板：用自然语言让 AI 改写当前选中的方案 */}
-      <div className="mt-4 rounded-xl border border-line bg-surface shadow-card">
+      {/* 聊天面板：用自然语言让 AI 改写当前选中的方案；hover 时流光边框渐显 */}
+      <div className="border-flow-hover mt-4 rounded-xl border border-line bg-surface shadow-card">
         <p className="inline-flex w-full items-center gap-2 border-b border-line bg-sunken px-4 py-2.5 text-sm font-medium text-ink-2">
           <MessageSquareText size={15} className="text-accent" />
           对「{localPlans[activeIndex].name}」提调整要求
@@ -300,8 +302,11 @@ export default function PlanPreview({
           {chats[activeIndex].map((msg, i) => (
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <p
-                className={`max-w-[80%] animate-fade-in rounded-xl px-3.5 py-2 text-sm ${
-                  msg.role === 'user' ? 'bg-accent text-white' : 'bg-sunken text-ink'
+                /* 定向滑入：用户消息从右、AI 回复从左（方向感比纯淡入更有"对话"质感） */
+                className={`max-w-[80%] rounded-xl px-3.5 py-2 text-sm ${
+                  msg.role === 'user'
+                    ? 'animate-slide-in-right bg-accent text-white'
+                    : 'animate-slide-in-left bg-sunken text-ink'
                 }`}
               >
                 {msg.content}
@@ -337,7 +342,7 @@ export default function PlanPreview({
           <button
             type="submit"
             disabled={adjusting || chatInput.trim() === ''}
-            className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-hi active:scale-[0.98] disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-hi hover:shadow-glow-md active:scale-[0.98] disabled:opacity-50"
           >
             <Send size={14} />
             发送
@@ -357,7 +362,7 @@ export default function PlanPreview({
           onClick={() => setPhase('confirm')}
           disabled={moveCount === 0}
           title={moveCount === 0 ? '没有可整理的文件' : undefined}
-          className="rounded-full bg-accent px-5 py-2 text-sm font-medium text-white transition hover:bg-accent-hi active:scale-[0.98] disabled:opacity-50"
+          className="rounded-full bg-accent px-5 py-2 text-sm font-medium text-white transition hover:bg-accent-hi hover:shadow-glow-md active:scale-[0.98] disabled:opacity-50"
         >
           确认整理
         </button>
@@ -371,8 +376,10 @@ export default function PlanPreview({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm animate-pop-in rounded-2xl border border-line bg-surface p-6 shadow-modal"
+            className="border-flow w-full max-w-sm animate-spring-pop rounded-2xl border border-line bg-surface p-6 shadow-modal"
           >
+            {/* key=phase：confirm→running→done 状态切换时内容交叉淡入（原来是瞬切） */}
+            <div key={phase} className="animate-fade-in">
             {phase === 'confirm' && (
               <>
                 <p className="text-ink">
@@ -406,10 +413,10 @@ export default function PlanPreview({
                   正在移动文件…
                   {moveProgress ? ` ${moveProgress.current}/${moveProgress.total}` : ''}
                 </p>
-                {/* 进度条：按已移动数量填充（细条 + accent，macOS 质感） */}
+                {/* 进度条：按已移动数量填充，填充带流光扫过 + 辉光 */}
                 <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-sunken">
                   <div
-                    className="h-full rounded-full bg-accent transition-all"
+                    className="shimmer h-full rounded-full bg-accent shadow-glow-sm transition-all"
                     style={{
                       width: moveProgress
                         ? `${Math.round((moveProgress.current / moveProgress.total) * 100)}%`
@@ -458,6 +465,7 @@ export default function PlanPreview({
                 </div>
               </>
             )}
+            </div>
           </div>
         </div>
       )}
