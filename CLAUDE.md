@@ -109,6 +109,7 @@ src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（elec
 ### 打包与 CI
 
 - electron-builder 配置在 `package.json` 的 `build` 字段（appId `com.pony9163.holy-sexy-folder-management`，产物输出 `release/`，图标 `build/icon.png`）；打包只收 `dist/**`、`electron/**`、`package.json`
+- `build/icon.png` 已按 macOS 图标比例切圆角（半径 22.37%，1024px 下 229px，四角透明）；原始方形版在 git 历史里，重做圆角用 ImageMagick 黑底白圆角蒙版 + CopyOpacity（蒙版务必 `-fill white`，默认黑填充会把整图变全透明）
 - **Linux deb 本地打**（`npm run dist`）；**mac dmg 只能走 CI**（本地是 Linux 构建不了 mac 产物）：`.github/workflows/build-mac.yml`，手动触发或推 `v*` 标签，在 macOS runner 上打 arm64 + x64 的 dmg，artifact 名 `mac-dmg`
 - CI 里 `CSC_IDENTITY_AUTO_DISCOVERY: 'false'` 是故意的：没有签名证书，跳过签名（产物未签名，用户需右键打开放行）；以后有 Developer ID 证书再接公证
 - workflow 用的官方 actions 均为 v5（checkout/setup-node/upload-artifact），别降回 v4（Node 20 弃用警告）
