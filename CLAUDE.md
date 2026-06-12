@@ -112,7 +112,7 @@ src/App.jsx → window.api.*（preload contextBridge）→ ipcMain.handle（elec
 - `build/icon.png` 已按 macOS 图标比例切圆角（半径 22.37%，1024px 下 229px，四角透明）；原始方形版在 git 历史里，重做圆角用 ImageMagick 黑底白圆角蒙版 + CopyOpacity（蒙版务必 `-fill white`，默认黑填充会把整图变全透明）
 - **Linux deb 本地打**（`npm run dist`）；**mac dmg 只能走 CI**（本地是 Linux 构建不了 mac 产物）：`.github/workflows/build-mac.yml`，手动触发或推 `v*` 标签，在 macOS runner 上打 arm64 + x64 的 dmg，artifact 名 `mac-dmg`
 - CI 里 `CSC_IDENTITY_AUTO_DISCOVERY: 'false'` 是故意的：没有签名证书，跳过签名（产物未签名，用户需右键打开放行）；以后有 Developer ID 证书再接公证
-- workflow 用的官方 actions 均为 v5（checkout/setup-node/upload-artifact），别降回 v4（Node 20 弃用警告）
+- workflow 用的官方 actions：checkout/setup-node 用 v5，upload-artifact 用 **v7**（其 v5 及以下是 node20 运行时，2026-06 起被 CI 警告弃用，v6 起才是 node24；v7 仅新增可选 `archive` 输入，向后兼容），别降版本
 
 ### 前端
 
