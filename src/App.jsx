@@ -446,8 +446,8 @@ export default function App() {
         {!isMac && window.api.win && <WindowControls />}
       </header>
 
-      {/* 主内容区 */}
-      <div className="mx-auto max-w-4xl px-8 py-6">
+      {/* 主内容区：全宽自适应，宽屏下表格/预览随窗口拉伸（文件管理类应用惯例） */}
+      <div className="px-8 py-6">
         {/* 约束开关栏：分析前声明哪些条目不参与整理（分析中/预览打开时锁定） */}
         {folderPath && (
           <div
